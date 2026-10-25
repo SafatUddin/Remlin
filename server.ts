@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
@@ -144,13 +145,10 @@ dotenv.config();
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Builds the Express app (all API/webhook routes + error handling) without binding a port,
-// so it can run both as a long-lived server (startServer below) and as a Vercel serverless
-// function (api/index.ts). `mountFrontend` serves the SPA when this process also hosts it.
-export function createApp(mountFrontend?: (app: express.Express) => void) {
+async function startServer() {
   const app = express();
 
-  // Needed so express-rate-limit sees the real client IP behind Vercel/Railway/other reverse proxies.
+  // Needed so express-rate-limit sees the real client IP behind Railway/other reverse proxies.
   app.set('trust proxy', 1);
 
   // Security headers. CSP is left off: a strict policy would break the Vite/React SPA,
@@ -182,6 +180,8 @@ export function createApp(mountFrontend?: (app: express.Express) => void) {
   // Cookie session CSRF: validate Origin/Referer on state-changing merchant API requests.
   app.use(requireTrustedOrigin);
 
+  const PORT = Number(process.env.PORT) || 3000;
+
   // Route modules extracted out of this file — see server/routes/*.ts. Each is a
   // self-contained feature area with its own Router, mounted here.
   app.use(createLegalRouter());
@@ -205,7 +205,24 @@ export function createApp(mountFrontend?: (app: express.Express) => void) {
   });
 
 
-  mountFrontend?.(app);
+  // Serve public folder for static assets
+  const publicPath = path.join(process.cwd(), 'public');
+  app.use('/assets', express.static(path.join(publicPath, 'assets')));
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
 
   // Global error handler — catches errors passed via next(err) that no route's own
   // try/catch handled, most notably Multer's upload rejections (oversized file, wrong
@@ -232,38 +249,9 @@ export function createApp(mountFrontend?: (app: express.Express) => void) {
     res.status(500).json({ error: 'Something went wrong' });
   });
 
-  return app;
-}
-
-async function startServer() {
-  const PORT = Number(process.env.PORT) || 3000;
-  // Vite is a dev-only dependency of this process — loaded lazily so production / serverless
-  // bundles never pull it in.
-  const vite = !isProduction
-    ? await (await import('vite')).createServer({ server: { middlewareMode: true }, appType: 'spa' })
-    : null;
-
-  const app = createApp((app) => {
-    // Serve public folder for static assets
-    const publicPath = path.join(process.cwd(), 'public');
-    app.use('/assets', express.static(path.join(publicPath, 'assets')));
-
-    if (vite) {
-      // Vite middleware for development
-      app.use(vite.middlewares);
-    } else {
-      const distPath = path.join(process.cwd(), 'dist');
-      app.use(express.static(distPath));
-      app.get('*', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
-      });
-    }
-  });
-
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-// On Vercel the app is imported by api/index.ts and invoked per request instead.
-if (!process.env.VERCEL) startServer();
+startServer();
