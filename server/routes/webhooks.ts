@@ -1,4 +1,5 @@
 import express from 'express';
+import { waitUntil } from '@vercel/functions';
 import { prisma } from '../db';
 import type { RequestWithRawBody } from '../types';
 import {
@@ -295,12 +296,15 @@ export function createWebhooksRouter(): express.Router {
       return res.sendStatus(401);
     }
 
-    // Acknowledge immediately — Meta expects a fast 200 and will retry on timeout.
+    // Acknowledge immediately — Meta expects a fast 200 and will retry on timeout. The
+    // processing below runs after the response; waitUntil keeps a serverless (Vercel)
+    // function alive until it finishes (no-op on a long-running server).
     res.sendStatus(200);
+    waitUntil(processMetaWebhook(req.body));
+  });
 
+  async function processMetaWebhook(body: any) {
     try {
-      const body = req.body;
-
       if (body.object === 'page') {
         for (const entry of body.entry || []) {
           const pageId = entry.id;
@@ -479,7 +483,7 @@ export function createWebhooksRouter(): express.Router {
     } catch (err) {
       console.error('Meta webhook processing error:', err);
     }
-  });
+  }
 
   return router;
 }
