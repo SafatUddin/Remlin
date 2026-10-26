@@ -6,6 +6,9 @@
 import { prisma } from './db';
 import { decryptSecret } from './crypto';
 import { generateAgentReply, DEFAULT_REPLY_TEXT } from './agent';
+import { resolveProductImageUrl } from '../shared/productImage';
+import { formatPrice, getCatalogCurrency, getProductCurrency } from '../shared/currency';
+import { resolveProductName } from '../shared/catalogColumns';
 import {
   sendMessengerMessage,
   sendMessengerImage,
@@ -153,7 +156,7 @@ export async function generateAndStoreAgentReply(
   if (!isProduction) {
     console.log('[AGENT REPLY] generateAndStoreAgentReply — conversationId:', conversation.id, '| storeId:', conversation.storeId);
   }
-  const [store, products, knowledgeDocuments, recentMessages, currentConversation, conversationOrders, lastOrder] = await Promise.all([
+  const [store, storedProducts, knowledgeDocuments, recentMessages, currentConversation, conversationOrders, lastOrder] = await Promise.all([
     prisma.store.findUnique({ where: { id: conversation.storeId } }),
     prisma.product.findMany({ where: { storeId: conversation.storeId } }),
     loadEnabledKnowledgeDocuments(conversation.storeId),
@@ -181,6 +184,7 @@ export async function generateAndStoreAgentReply(
       select: { address: true, customerPhone: true },
     }),
   ]);
+  const products = storedProducts.map((p) => ({ ...p, name: resolveProductName(p) }));
   if (!store || !currentConversation) return;
 
   const persona = {
@@ -199,13 +203,16 @@ export async function generateAndStoreAgentReply(
     },
     shareBusinessInfo: store.shareBusinessInfo,
   };
+  const storeCurrency = getCatalogCurrency(products);
+  const money = (amount: number, currency?: string) => formatPrice(amount, currency || storeCurrency);
   const catalog = products.map((p) => ({
     name: p.name,
     sku: p.sku,
     price: Number(p.price),
     inventory: p.inventory,
     status: p.status === 'TRAINED' ? 'Trained' : 'Pending',
-    imageUrl: p.imageUrl || undefined,
+    imageUrl: resolveProductImageUrl(p),
+    currency: getProductCurrency(p.rawAttributes),
   }));
   const knowledge = selectRelevantKnowledge(
     knowledgeDocuments,
@@ -364,7 +371,8 @@ export async function generateAndStoreAgentReply(
     if (validated.ok) {
       const price = Number(validated.product.price);
       const total = price * validated.qty;
-      setReply(texts.cartAddConfirm(validated.qty, validated.product.name, price.toFixed(2), total.toFixed(2)));
+      const productCurrency = getProductCurrency(products.find((p) => p.sku === validated.sku)?.rawAttributes);
+      setReply(texts.cartAddConfirm(validated.qty, validated.product.name, money(price, productCurrency), money(total, productCurrency)));
       result.cartAction = { action: 'none', sku: '', quantity: 0 };
       result.askQuantityForSku = encodeConfirm(validated.sku, validated.qty);
       result.orderConfirmationRequested = false;
@@ -392,7 +400,7 @@ export async function generateAndStoreAgentReply(
   }
 
   const imageProduct = result.showImageForSku ? products.find((p) => p.sku === result.showImageForSku) : undefined;
-  let resolvedImageUrl = imageProduct?.imageUrl || undefined;
+  let resolvedImageUrl = imageProduct ? resolveProductImageUrl(imageProduct) : undefined;
 
   // Captured by id (not by text) so every later correction below targets exactly this
   // message — matching by {conversationId, sender, text} instead would silently rewrite
@@ -525,7 +533,7 @@ export async function generateAndStoreAgentReply(
     orders
       .map((o) => {
         const items = ((o.items as any[]) || []).map((i: any) => `${i.quantity}x ${i.name}`).join(', ');
-        return `• #${orderRef(o.id)} — ${items || '-'} ($${Number(o.total).toFixed(2)})`;
+        return `• #${orderRef(o.id)} — ${items || '-'} (${money(Number(o.total))})`;
       })
       .join('\n');
   const askToCancel = (orders: typeof conversationOrders) => {
@@ -610,7 +618,7 @@ export async function generateAndStoreAgentReply(
       .filter((x) => !!x.product);
     if (lines.length === 0) return '';
     const total = lines.reduce((sum, x) => sum + Number(x.product!.price) * x.line.quantity, 0);
-    return `${lines.map((x) => `${x.line.quantity}x ${x.product!.name}`).join(', ')} — $${total.toFixed(2)}`;
+    return `${lines.map((x) => `${x.line.quantity}x ${x.product!.name}`).join(', ')} — ${money(total)}`;
   };
   const contactConfirmText = (cart: { sku: string; quantity: number }[]) => {
     return texts.contactConfirm(cartSummary(cart), contact.phone, contact.address);

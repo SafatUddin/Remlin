@@ -74,9 +74,9 @@ export function replyTexts(lang: ReplyLanguage) {
     cartAddConfirm: (qty: number, name: string, price: string, total: string) =>
       pick(
         lang,
-        `You'd like ${qty}x ${name} at $${price} each — total $${total}. Would you like to confirm this order?`,
-        `Apni ${qty}x ${name} nite chan, protita $${price} — mot $${total}. Order ta confirm korben?`,
-        `আপনি ${qty}x ${name} নিতে চান, প্রতিটি $${price} — মোট $${total}। অর্ডারটি কনফার্ম করবেন?`,
+        `You'd like ${qty}x ${name} at ${price} each — total ${total}. Would you like to confirm this order?`,
+        `Apni ${qty}x ${name} nite chan, protita ${price} — mot ${total}. Order ta confirm korben?`,
+        `আপনি ${qty}x ${name} নিতে চান, প্রতিটি ${price} — মোট ${total}। অর্ডারটি কনফার্ম করবেন?`,
       ),
     onlyAvailable: (inventory: number, name: string, max: number) =>
       pick(
@@ -239,19 +239,19 @@ export function replyTexts(lang: ReplyLanguage) {
         `Dukkhito, order place korte somossa hoyeche. Abar try korte "ha" likhun, ba amader team shighroi jogajog korbe.`,
         `দুঃখিত, অর্ডার দিতে সমস্যা হয়েছে। আবার চেষ্টা করতে "হ্যাঁ" লিখুন, অথবা আমাদের টিম শীঘ্রই যোগাযোগ করবে।`,
       ),
-    askQuantity: (name: string, price: number) =>
+    askQuantity: (name: string, price: string) =>
       pick(
         lang,
-        `${name} is $${price} per piece. How many would you like?`,
-        `${name} er dam protita $${price}. Apni koyta nite chan?`,
-        `${name} এর দাম প্রতিটি $${price}। আপনি কয়টি নিতে চান?`,
+        `${name} is ${price} per piece. How many would you like?`,
+        `${name} er dam protita ${price}. Apni koyta nite chan?`,
+        `${name} এর দাম প্রতিটি ${price}। আপনি কয়টি নিতে চান?`,
       ),
-    showProduct: (name: string, price: number) =>
+    showProduct: (name: string, price: string) =>
       pick(
         lang,
-        `Here's ${name} — $${price}. Would you like to order it?`,
-        `Ei je ${name} — $${price}. Order korte chan?`,
-        `এই যে ${name} — $${price}। অর্ডার করতে চান?`,
+        `Here's ${name} — ${price}. Would you like to order it?`,
+        `Ei je ${name} — ${price}. Order korte chan?`,
+        `এই যে ${name} — ${price}। অর্ডার করতে চান?`,
       ),
     flaggedForReview: () =>
       pick(

@@ -179,6 +179,7 @@ export interface ApiProduct {
   status: 'Trained' | 'Pending';
   description?: string;
   imageUrl?: string;
+  imageSource?: 'stored' | 'attribute';
   rawAttributes?: Record<string, any>;
 }
 
@@ -207,6 +208,23 @@ export function updateProduct(id: string, input: { name: string; sku: string; pr
 
 export function deleteProduct(id: string) {
   return request<void>(`/api/products/${id}`, { method: 'DELETE' });
+}
+
+export type BulkProductInput = { name: string; sku: string; price: number; inventory: number; status?: 'Trained' | 'Pending'; description?: string; rawAttributes?: Record<string, any> };
+
+export function createProductsBulk(products: BulkProductInput[], catalogSource: 'CSV') {
+  return request<{ created: number; skipped: number; invalid: number }>('/api/products/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ products, catalogSource }),
+  });
+}
+
+export function deleteProducts(ids: string[]) {
+  return request<{ deletedIds: string[] }>('/api/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+}
+
+export function setProductImageUrl(productId: string, imageUrl: string) {
+  return request<ApiProduct>(`/api/products/${productId}/image-url`, { method: 'PUT', body: JSON.stringify({ imageUrl }) });
 }
 
 /** Upload a product photo. Field name must be "image" to match the backend's multer config. */

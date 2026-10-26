@@ -22,6 +22,8 @@ import {
   sendInstagramImage,
 } from '../meta';
 import { generateAgentReply } from '../agent';
+import { getProductCurrency } from '../../shared/currency';
+import { resolveProductName } from '../../shared/catalogColumns';
 import {
   getPageAccessTokenForStore,
   getWhatsAppCredentialsForStore,
@@ -407,11 +409,12 @@ export function createConversationsRouter(): express.Router {
         shareBusinessInfo: store.shareBusinessInfo,
       };
       const catalog = products.map((p) => ({
-        name: p.name,
+        name: resolveProductName(p),
         sku: p.sku,
         price: Number(p.price),
         inventory: p.inventory,
         status: p.status === 'TRAINED' ? 'Trained' : 'Pending',
+        currency: getProductCurrency(p.rawAttributes),
       }));
 
       const safeHistory = Array.isArray(history)

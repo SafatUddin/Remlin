@@ -54,10 +54,27 @@ export async function verifyWooCommerceStore(url: string, consumerKey: string, c
 /**
   Fetch all products from connected WooCommerce store using WC REST API v3 (handles pagination).
  */
+async function fetchWooCurrency(baseUrl: string, authHeader: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`${baseUrl}/wp-json/wc/v3/data/currencies/current`, {
+      headers: {
+        'Authorization': authHeader,
+        'User-Agent': 'ShopMateAI-WooCommerce-Adapter/1.0',
+      },
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    return typeof data?.code === 'string' && data.code ? data.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchWooCommerceProducts(url: string, consumerKey: string, consumerSecret: string): Promise<WooCommerceProduct[]> {
   const baseUrl = normalizeWooUrl(url);
   const authHeader = 'Basic ' + Buffer.from(`${consumerKey.trim()}:${consumerSecret.trim()}`).toString('base64');
   const products: WooCommerceProduct[] = [];
+  const currency = await fetchWooCurrency(baseUrl, authHeader);
   
   let page = 1;
   const perPage = 100;
@@ -100,6 +117,7 @@ export async function fetchWooCommerceProducts(url: string, consumerKey: string,
         'Stock Status': p.stock_status || undefined,
         'Manage Stock': p.manage_stock ? 'Yes' : 'No',
         'Weight': p.weight ? `${p.weight} kg` : undefined,
+        'Currency': currency,
       };
 
       if (Array.isArray(p.attributes)) {

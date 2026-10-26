@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { requireAuth, AuthedRequest } from '../auth';
 import { requireProfileComplete } from '../profileCompletion';
 import { normalizeAiMeta } from '../agent';
+import { formatPrice, getCatalogCurrency } from '../../shared/currency';
 
 export function createAnalyticsRouter(): express.Router {
   const router = express.Router();
@@ -351,6 +352,10 @@ export function createAnalyticsRouter(): express.Router {
       const orderStatusLabel = (s: string) =>
         s === 'DELIVERED' ? 'Delivered' : s === 'CANCELLED' ? 'Cancelled' : s === 'ON_THE_WAY' ? 'On the Way' : 'Processing';
 
+      const storeCurrency = getCatalogCurrency(
+        await prisma.product.findMany({ where: { storeId }, select: { rawAttributes: true } })
+      );
+
       const activityItems: {
         id: string;
         type: 'order' | 'complaint' | 'inventory';
@@ -362,7 +367,7 @@ export function createAnalyticsRouter(): express.Router {
           id: `order-${o.id}`,
           type: 'order' as const,
           title: `Order`,
-          body: `${o.customerName} · $${Number(o.total).toFixed(2)} · ${orderStatusLabel(o.status)}`,
+          body: `${o.customerName} · ${formatPrice(Number(o.total), storeCurrency)} · ${orderStatusLabel(o.status)}`,
           time: o.createdAt.toISOString(),
         })),
         ...recentComplaints.map(c => ({

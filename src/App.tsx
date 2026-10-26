@@ -16,9 +16,10 @@ import {
   listProducts,
   createProduct,
   updateProduct,
-  deleteProduct,
+  deleteProducts,
   uploadProductImage,
   deleteProductImage,
+  setProductImageUrl,
   getPersona,
   updatePersona,
   uploadOpeningImage,
@@ -51,6 +52,9 @@ import SettingsPage from './components/SettingsPage';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSettings from './components/AdminSettings';
 
+// Dashboard pages a logged-in merchant is returned to after a browser refresh.
+const RESTORABLE_TABS: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'bookings', 'analytics', 'integrations', 'settings', 'support'];
+
 // ─────────────────────────────────────────────────────────────────────────
 // App is the single root component: it owns navigation, the auth session,
 // and every domain's data (products/persona/conversations/integrations),
@@ -78,6 +82,9 @@ export default function App() {
   // We reference `profileComplete` via a ref so the function doesn't need to re-bind on every state change.
   const profileCompleteRef = useRef(false);
   const isAuthenticatedRef = useRef(false);
+  // The URL hash at page load (e.g. "#catalog"), captured before it gets rewritten, so a
+  // browser refresh can put the merchant back on the page they were on.
+  const initialHashRef = useRef(window.location.hash);
 
   const navigateTo = (tab: Tab, replace = false) => {
     const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'bookings', 'analytics', 'integrations', 'settings', 'support'];
@@ -148,11 +155,21 @@ export default function App() {
         setProfileComplete(res.profileComplete);
         setIsAdmin(res.isAdmin ?? false);
         syncProfileToLocalStorage(res.merchant);
-        // Admin goes to admin dashboard, others go to inbox or onboarding
+        // Admin goes to admin dashboard; others return to the page they refreshed on,
+        // falling back to inbox (or onboarding if the profile is incomplete).
         if (res.isAdmin) {
           navigateTo('admin', true);
+        } else if (!res.profileComplete) {
+          navigateTo('onboarding', true);
         } else {
-          navigateTo(res.profileComplete ? 'inbox' : 'onboarding', true);
+          const initialHash = initialHashRef.current;
+          const hashTab = initialHash.slice(1).split('?')[0] as Tab;
+          const restoreTab = RESTORABLE_TABS.includes(hashTab) ? hashTab : null;
+          navigateTo(restoreTab ?? 'inbox', true);
+          // Keep any query (e.g. "#integrations?shopifyConnected=1") for the page to read
+          if (restoreTab && initialHash.includes('?')) {
+            window.history.replaceState({ tab: restoreTab }, '', initialHash);
+          }
         }
       })
       .catch(() => {
@@ -317,16 +334,17 @@ export default function App() {
 
   const [isWebsiteConnected, setIsWebsiteConnected] = useState(false);
 
+  const reloadProducts = async () => {
+    const res = await listProducts();
+    setProducts(res.products);
+    setIsWebsiteConnected(!!res.isWebsiteConnected);
+  };
+
   // Load real catalog + persona + conversations from the backend once we know who's logged in.
   // Skip all dashboard fetches until onboarding is complete — they would all 403 anyway.
   useEffect(() => {
     if (!merchant || !profileComplete) return;
-    listProducts()
-      .then((res) => {
-        setProducts(res.products);
-        setIsWebsiteConnected(!!res.isWebsiteConnected);
-      })
-      .catch((err) => console.error('Failed to load products:', err));
+    reloadProducts().catch((err) => console.error('Failed to load products:', err));
     getPersona()
       .then((p) => setPersona({ 
         tone: p.tone, 
@@ -384,19 +402,25 @@ export default function App() {
     return created;
   };
 
-  const handleEditProduct = async (id: string, updates: Omit<Product, 'id' | 'imageUrl' | 'rawAttributes'>) => {
+  const handleEditProduct = async (id: string, updates: Omit<Product, 'id' | 'imageUrl' | 'imageSource'>) => {
     const updated = await updateProduct(id, updates);
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;
   };
 
-  const handleDeleteProduct = async (id: string) => {
-    await deleteProduct(id);
-    setProducts((prev) => prev.filter(p => p.id !== id));
+  const handleDeleteProducts = async (ids: string[]) => {
+    const { deletedIds } = await deleteProducts(ids);
+    const deleted = new Set(deletedIds);
+    setProducts((prev) => prev.filter(p => !deleted.has(p.id)));
   };
 
   const handleUploadProductImage = async (id: string, file: File) => {
     const updated = await uploadProductImage(id, file);
+    setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+  };
+
+  const handleSetProductImageUrl = async (id: string, imageUrl: string) => {
+    const updated = await setProductImageUrl(id, imageUrl);
     setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
   };
 
@@ -583,8 +607,9 @@ export default function App() {
             isWebsiteConnected={isWebsiteConnected}
             onAddProduct={handleAddProduct}
             onEditProduct={handleEditProduct}
-            onDeleteProduct={handleDeleteProduct}
+            onDeleteProducts={handleDeleteProducts}
             onUploadProductImage={handleUploadProductImage}
+            onSetProductImageUrl={handleSetProductImageUrl}
             onDeleteProductImage={handleDeleteProductImage}
           />
         );
@@ -598,9 +623,9 @@ export default function App() {
           />
         );
       case 'orders':
-        return <OrdersPage />;
+        return <OrdersPage products={products} />;
       case 'bookings':
-        return <BookingsPage />;
+        return <BookingsPage products={products} />;
       case 'analytics':
         return <AnalyticsDashboard />;
       case 'integrations':
@@ -609,6 +634,8 @@ export default function App() {
             integrations={integrations}
             onToggleConnection={handleToggleIntegration}
             onRefreshAll={handleRefreshAllIntegrations}
+            onReloadProducts={reloadProducts}
+            onGoToCatalog={() => handleNavigate('catalog')}
           />
         );
       default:

@@ -97,9 +97,23 @@ export interface ShopifyProduct {
 // Pulls all products (paginated via Shopify's Link header, 250 per page max) and
 // flattens to one row per product using its first variant — good enough for simple
 // (non-variant) catalogs, which covers most small merchants.
+async function fetchShopifyCurrency(host: string, accessToken: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://${host}/admin/api/${API_VERSION}/shop.json`, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    return typeof data.shop?.currency === 'string' && data.shop.currency ? data.shop.currency : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchShopifyProducts(domain: string, accessToken: string): Promise<ShopifyProduct[]> {
   const host = normalizeDomain(domain);
   const products: ShopifyProduct[] = [];
+  const currency = await fetchShopifyCurrency(host, accessToken);
   let url: string | null = `https://${host}/admin/api/${API_VERSION}/products.json?limit=250`;
 
   while (url) {
@@ -126,6 +140,7 @@ export async function fetchShopifyProducts(domain: string, accessToken: string):
         'Vendor': p.vendor || undefined,
         'Tags': p.tags ? (Array.isArray(p.tags) ? p.tags.join(', ') : p.tags) : undefined,
         'Weight': variant.weight ? `${variant.weight} ${variant.weight_unit || 'g'}` : undefined,
+        'Currency': currency,
       };
 
       if (p.options && Array.isArray(p.options)) {

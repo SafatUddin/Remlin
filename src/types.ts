@@ -23,6 +23,7 @@ export interface Product {
   status: 'Trained' | 'Pending';
   description?: string;
   imageUrl?: string;
+  imageSource?: 'stored' | 'attribute';
   rawAttributes?: Record<string, any>;
 }
 

@@ -23,6 +23,7 @@ import {
 import { Conversation, ChatMessage, Product } from '../types';
 import { sendConversationMessage, approveDraftMessage, createOrderFromConversation, updateConversationCart, updateConversationComplaint, updateConversationArchived, updateConversationSpam, listOrders, updateOrderStatus, ApiOrder } from '../lib/api';
 import DashboardHeader from './DashboardHeader';
+import { formatPrice, getCatalogCurrency, getOrderCurrency, getProductCurrency } from '../../shared/currency';
 
 // Helper function to format timestamp in merchant's local timezone
 function formatMessageTime(timestamp: string | Date): string {
@@ -117,6 +118,7 @@ export default function InboxConsole({
   onUpdateConversationStatus,
   onDeleteConversation
 }: InboxConsoleProps) {
+  const storeCurrency = React.useMemo(() => getCatalogCurrency(products), [products]);
   const [selectedChatId, setSelectedChatId] = useState(conversations[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [inputText, setInputText] = useState('');
@@ -1033,7 +1035,7 @@ export default function InboxConsole({
                       <div key={item.sku} className="flex justify-between items-start text-[13px] font-sans border-b border-white/[0.05] pb-2.5 last:border-0 last:pb-0">
                         <div className="flex-grow min-w-0 pr-2">
                           <span className="text-white font-bold block truncate">{product?.name || item.sku}</span>
-                          <span className="text-white/50 text-[11.5px]">${(product?.price || 0).toFixed(2)} each</span>
+                          <span className="text-white/50 text-[11.5px]">{formatPrice(product?.price || 0, product ? getProductCurrency(product.rawAttributes) || storeCurrency : storeCurrency)} each</span>
                           {/* Quantity controls — Section 4: allow cart quantity updates */}
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <button
@@ -1052,7 +1054,7 @@ export default function InboxConsole({
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          <span className="text-white font-bold">${((product?.price || 0) * item.quantity).toFixed(2)}</span>
+                          <span className="text-white font-bold">{formatPrice((product?.price || 0) * item.quantity, product ? getProductCurrency(product.rawAttributes) || storeCurrency : storeCurrency)}</span>
                           <button
                             type="button"
                             onClick={() => handleRemoveCartItem(item.sku)}
@@ -1069,7 +1071,10 @@ export default function InboxConsole({
                   <div className="flex justify-between items-center pt-2 border-t border-white/[0.08] text-sm font-sans font-bold text-white">
                     <span>Total</span>
                     <span>
-                      ${activeChat.cart.reduce((sum, item) => sum + (products.find((p) => p.sku === item.sku)?.price || 0) * item.quantity, 0).toFixed(2)}
+                      {formatPrice(
+                        activeChat.cart.reduce((sum, item) => sum + (products.find((p) => p.sku === item.sku)?.price || 0) * item.quantity, 0),
+                        getOrderCurrency(activeChat.cart, products, storeCurrency)
+                      )}
                     </span>
                   </div>
 
@@ -1161,7 +1166,7 @@ export default function InboxConsole({
                             {new Date(order.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                           </span>
                           <span className="font-sans text-[12px] font-bold text-white">
-                            ${order.total.toFixed(2)}
+                            {formatPrice(order.total, getOrderCurrency(order.items, products, storeCurrency))}
                           </span>
                         </div>
 
@@ -1234,7 +1239,7 @@ export default function InboxConsole({
                               {new Date(order.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                             </span>
                             <span className="font-sans text-[12px] font-bold text-white">
-                              ${order.total.toFixed(2)}
+                              {formatPrice(order.total, getOrderCurrency(order.items, products, storeCurrency))}
                             </span>
                           </div>
                         </div>

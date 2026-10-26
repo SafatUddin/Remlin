@@ -20,6 +20,8 @@ import {
   Copy,
 } from 'lucide-react';
 import { Integration } from '../types';
+import { CURRENCY_ATTRIBUTE_KEY, detectCurrencyInHeader, detectCurrencyInText, isCurrencyKey } from '../../shared/currency';
+import { detectCatalogColumns } from '../../shared/catalogColumns';
 import {
   listChannels,
   disconnectChannel,
@@ -40,17 +42,47 @@ import {
   getCatalogSource,
   setCatalogSource,
   CatalogSource,
+  createProductsBulk,
+  BulkProductInput,
 } from '../lib/api';
 import DashboardHeader from './DashboardHeader';
+import { readSpreadsheet } from '../lib/spreadsheet';
+
+const IMPORT_BATCH_SIZE = 250;
+const MAX_IMPORT_FILE_BYTES = 20 * 1024 * 1024;
+
+// "1,200.50" → 1200.5, "12,50" / "1.234,56" (comma decimals) → 12.5 / 1234.56, "৳ 999" → 999
+function parseAmount(text: string): number {
+  let value = text.replace(/[^0-9.,]/g, '');
+  value = /,\d{1,2}$/.test(value) && !/\.\d{1,2}$/.test(value)
+    ? value.replace(/\./g, '').replace(',', '.')
+    : value.replace(/,/g, '');
+  return parseFloat(value) || 0;
+}
+
+type CatalogLoadedInfo = { source: string; total: number; created?: number; updated?: number; skipped?: number };
 
 interface IntegrationsHubProps {
   integrations: Integration[];
   onToggleConnection: (id: string) => void;
   onRefreshAll: () => Promise<void>;
+  onReloadProducts: () => Promise<void>;
+  onGoToCatalog: () => void;
 }
 
-export default function IntegrationsHub({ integrations, onToggleConnection, onRefreshAll }: IntegrationsHubProps) {
+export default function IntegrationsHub({ integrations, onToggleConnection, onRefreshAll, onReloadProducts, onGoToCatalog }: IntegrationsHubProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  // "Products loaded" confirmation shown after a catalog connector / file import finishes
+  const [catalogLoaded, setCatalogLoaded] = useState<CatalogLoadedInfo | null>(null);
+
+  const announceCatalogLoaded = async (info: CatalogLoadedInfo) => {
+    try {
+      await onReloadProducts();
+    } catch (err) {
+      console.error('Failed to reload products:', err);
+    }
+    setCatalogLoaded(info);
+  };
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [catalogSource, setCatalogSourceState] = useState<CatalogSource>('CUSTOM');
   const [catalogSourceError, setCatalogSourceError] = useState('');
@@ -97,111 +129,120 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
   const [isSyncingShopify, setIsSyncingShopify] = useState(false);
   const [shopifySyncResult, setShopifySyncResult] = useState<{ created: number; updated: number; total: number } | null>(null);
   // Excel/CSV Catalog Upload state
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-  const [excelUploading, setExcelUploading] = useState(false);
-  const [excelSuccessMsg, setExcelSuccessMsg] = useState('');
+  const [uploadStep, setUploadStep] = useState<'closed' | 'select' | 'importing'>('closed');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState('');
+  const [importProgress, setImportProgress] = useState({ total: 0, processed: 0, created: 0 });
   const [excelErrorMsg, setExcelErrorMsg] = useState('');
+  const uploadInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleExcelUpload = async (file: File | undefined) => {
+  const openUploadDialog = () => {
+    setUploadFile(null);
+    setUploadError('');
+    setExcelErrorMsg('');
+    setUploadStep('select');
+  };
+
+  // Turns sheet rows (first row = headers) into catalog products
+  const rowsToProducts = (rows: string[][]): BulkProductInput[] => {
+    const [headers, ...dataRows] = rows;
+    // Map headers to core fields once, by whole-word priority (e.g. "product_name" → name, "product_id" → SKU)
+    const columns = detectCatalogColumns(headers, isCurrencyKey);
+    const coreHeaders = new Set(Object.values(columns));
+    const importStamp = Date.now();
+
+    return dataRows.map((values, rowIndex) => {
+      const i = rowIndex + 1;
+      const rowMap: Record<string, string> = {};
+      headers.forEach((h, idx) => {
+        if (h && values[idx] !== undefined && values[idx] !== '') {
+          rowMap[h] = values[idx];
+        }
+      });
+      const valueOf = (header?: string) => (header ? rowMap[header] : undefined);
+
+      const sku = valueOf(columns.sku) || `SKU-${i}-${importStamp}`;
+      // Fallback name: first non-core text column that isn't a number or a link
+      const fallbackName = headers.find((h) => !coreHeaders.has(h) && rowMap[h] && !/^[\d\s.,-]+$/.test(rowMap[h]) && !/^https?:\/\//i.test(rowMap[h]));
+      const name = valueOf(columns.name) || (fallbackName && rowMap[fallbackName]) || `Product ${i}`;
+      const priceKey = columns.price;
+      const priceStr = valueOf(priceKey) || '0';
+      const hasCurrencyColumn = Object.keys(rowMap).some(isCurrencyKey);
+      const detectedCurrency = hasCurrencyColumn || !priceKey
+        ? undefined
+        : detectCurrencyInText(priceStr) || detectCurrencyInHeader(priceKey);
+      const price = parseAmount(priceStr);
+      const invStr = valueOf(columns.inventory) || '0';
+      const inventory = parseInt(invStr.replace(/[^0-9]/g, '')) || 0;
+      const description = valueOf(columns.description) || undefined;
+
+      // Collect all remaining (non-core) columns into dynamic rawAttributes
+      const rawAttributes: Record<string, any> = {};
+      headers.forEach((h, idx) => {
+        const val = values[idx];
+        if (h && val !== undefined && val !== '' && !coreHeaders.has(h)) {
+          rawAttributes[h] = val;
+        }
+      });
+      if (detectedCurrency) rawAttributes[CURRENCY_ATTRIBUTE_KEY] = detectedCurrency;
+
+      return {
+        name: name.slice(0, 200),
+        sku: sku.slice(0, 100),
+        price,
+        inventory,
+        description: description?.slice(0, 5000),
+        rawAttributes: Object.keys(rawAttributes).length > 0 ? rawAttributes : undefined,
+        status: 'Trained' as const,
+      };
+    });
+  };
+
+  const handleImportConfirm = async () => {
+    const file = uploadFile;
     if (!file) return;
-    if (catalogSource !== 'CSV') {
-      setExcelErrorMsg('Select CSV as your product catalog source before uploading.');
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setUploadError('This file is larger than 20 MB. Split it into smaller files and upload them one by one.');
       return;
     }
-    setExcelFile(file);
-    setExcelUploading(true);
-    setExcelSuccessMsg('');
-    setExcelErrorMsg('');
+    setUploadError('');
+    setImportProgress({ total: 0, processed: 0, created: 0 });
+    setUploadStep('importing');
 
     try {
-      const text = await file.text();
-      const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (rawLines.length === 0) throw new Error('File is empty');
-
-      // Helper to parse CSV line handling quotes
-      const parseCSVLine = (line: string): string[] => {
-        const result: string[] = [];
-        let current = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            result.push(current.trim().replace(/^"|"$/g, ''));
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        result.push(current.trim().replace(/^"|"$/g, ''));
-        return result;
-      };
-
-      const headers = parseCSVLine(rawLines[0]);
-      let count = 0;
-
-      for (let i = 1; i < rawLines.length; i++) {
-        const values = parseCSVLine(rawLines[i]);
-        if (values.length === 0) continue;
-
-        const rowMap: Record<string, string> = {};
-        headers.forEach((h, idx) => {
-          if (h && values[idx] !== undefined && values[idx] !== '') {
-            rowMap[h] = values[idx];
-          }
-        });
-
-        // Smart field matching (case insensitive)
-        const findVal = (...keys: string[]) => {
-          const matchedKey = Object.keys(rowMap).find(k => keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
-          return matchedKey ? rowMap[matchedKey] : undefined;
-        };
-
-        const name = findVal('title', 'name', 'product') || values[0] || `Product ${i}`;
-        const sku = findVal('sku', 'code', 'id') || `SKU-${i}-${Date.now()}`;
-        const priceStr = findVal('price', 'cost', 'msrp', 'amount') || '0';
-        const price = parseFloat(priceStr.replace(/[^0-9.]/g, '')) || 0.0;
-        const invStr = findVal('inventory', 'stock', 'quantity', 'qty', 'unit') || '0';
-        const inventory = parseInt(invStr.replace(/[^0-9]/g, '')) || 0;
-        const description = findVal('description', 'desc', 'details', 'body') || undefined;
-
-        // Collect all remaining columns into dynamic rawAttributes
-        const rawAttributes: Record<string, any> = {};
-        headers.forEach((h, idx) => {
-          const val = values[idx];
-          if (h && val !== undefined && val !== '') {
-            const hLower = h.toLowerCase();
-            if (!['title', 'name', 'sku', 'price', 'inventory', 'stock', 'quantity', 'description', 'desc'].some(k => hLower === k)) {
-              rawAttributes[h] = val;
-            }
-          }
-        });
-
-        try {
-          const { createProduct } = await import('../lib/api');
-          await createProduct({
-            name,
-            sku,
-            price,
-            inventory,
-            description,
-            rawAttributes: Object.keys(rawAttributes).length > 0 ? rawAttributes : undefined,
-            status: 'Trained',
-            catalogSource: 'CSV',
-          });
-          count++;
-        } catch (e) {
-          // ignore duplicate SKUs during bulk import
-        }
+      if (catalogSource === 'CUSTOM') {
+        const result = await setCatalogSource('CSV');
+        setCatalogSourceState(result.catalogSource);
       }
 
-      setExcelSuccessMsg(`Successfully imported & indexed ${count} products from ${file.name}`);
+      const rows = await readSpreadsheet(file);
+      if (rows.length < 2) throw new Error('The file has no product rows under the header row.');
+      const products = rowsToProducts(rows);
+      setImportProgress({ total: products.length, processed: 0, created: 0 });
+
+      // Send in batches so the progress counter moves and each request stays small
+      let processed = 0;
+      let created = 0;
+      let skipped = 0;
+      for (let start = 0; start < products.length; start += IMPORT_BATCH_SIZE) {
+        const batch = products.slice(start, start + IMPORT_BATCH_SIZE);
+        const result = await createProductsBulk(batch, 'CSV');
+        processed += batch.length;
+        created += result.created;
+        skipped += result.skipped + result.invalid;
+        setImportProgress({ total: products.length, processed, created });
+      }
+
       await onRefreshAll();
+      setUploadStep('closed');
+      if (created > 0) {
+        await announceCatalogLoaded({ source: file.name, total: created, created, skipped });
+      } else {
+        setExcelErrorMsg(`No new products were imported from ${file.name} — ${skipped} row(s) already exist or were invalid.`);
+      }
     } catch (err: any) {
-      setExcelErrorMsg(err.message || 'Failed to parse product catalog file');
-    } finally {
-      setExcelUploading(false);
+      setUploadError(err.message || 'Failed to import the product file.');
+      setUploadStep('select');
     }
   };
 
@@ -271,6 +312,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       setActiveWizardId('int-shopify');
       setWizardStep(2);
       window.history.replaceState(null, '', '#integrations');
+      handleShopifySync();
     } else if (params.get('waConnected') || params.get('fbConnected')) {
       refreshChannelsStatus();
       window.history.replaceState(null, '', '#integrations');
@@ -415,6 +457,9 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       setShopifyStoreName(res.name);
       setWizardStep(2);
       refreshChannelsStatus();
+      setIsConnectingShopify(false);
+      // Pull the products right away so the merchant lands on a populated catalog
+      await handleShopifySync();
     } catch (err: any) {
       setShopifyError(err.message || 'Failed to connect Shopify store');
     } finally {
@@ -428,6 +473,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
     try {
       const res = await syncShopifyChannel();
       setShopifySyncResult(res);
+      await announceCatalogLoaded({ source: 'Shopify', ...res });
     } catch (err: any) {
       setShopifyError(err.message || 'Failed to sync products');
     } finally {
@@ -464,6 +510,9 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       setWooStoreName(res.name);
       setWizardStep(2);
       refreshChannelsStatus();
+      setIsConnectingWoo(false);
+      // Pull the products right away so the merchant lands on a populated catalog
+      await handleWooCommerceSync();
     } catch (err: any) {
       setWooError(err.message || 'Failed to connect WooCommerce store');
     } finally {
@@ -477,6 +526,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
     try {
       const res = await syncWooCommerceChannel();
       setWooSyncResult(res);
+      await announceCatalogLoaded({ source: 'WooCommerce', ...res });
     } catch (err: any) {
       setWooError(err.message || 'Failed to sync WooCommerce products');
     } finally {
@@ -1137,12 +1187,6 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                     {csvLocked ? `Select "CSV" as catalog source first` : `Don't have a website? Upload your product catalog excel/csv file and continue your business`}
                   </p>
 
-                  {excelSuccessMsg && !csvLocked && (
-                    <div className="status-success text-[11px] p-2 rounded-xl font-sans mt-2">
-                      {excelSuccessMsg}
-                    </div>
-                  )}
-
                   {excelErrorMsg && !csvLocked && (
                     <div className="status-danger text-[11px] p-2 rounded-xl font-sans mt-2">
                       {excelErrorMsg}
@@ -1155,21 +1199,19 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                     {csvLocked ? 'Source locked' : 'Bulk SKU import'}
                   </span>
 
-                  <label className={`font-sans text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
-                    csvLocked
-                      ? 'bg-white/5 text-white/30 cursor-not-allowed'
-                      : 'btn-accent cursor-pointer shadow-md hover:scale-105'
-                  }`}>
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      className="hidden"
-                      disabled={excelUploading || csvLocked}
-                      onChange={(e) => handleExcelUpload(e.target.files?.[0])}
-                    />
+                  <button
+                    type="button"
+                    onClick={openUploadDialog}
+                    disabled={csvLocked || uploadStep === 'importing'}
+                    className={`font-sans text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                      csvLocked
+                        ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                        : 'btn-accent cursor-pointer shadow-md hover:scale-105'
+                    }`}
+                  >
                     <Upload className="h-3.5 w-3.5" />
-                    {csvLocked ? 'Locked' : excelUploading ? 'Uploading…' : 'Upload'}
-                  </label>
+                    {csvLocked ? 'Locked' : uploadStep === 'importing' ? 'Importing…' : 'Upload'}
+                  </button>
                 </div>
               </div>
             );
@@ -1803,6 +1845,173 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                   </button>
                 ))}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CSV / Excel import: choose file → progress */}
+      <AnimatePresence>
+        {uploadStep !== 'closed' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-upload-title"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+              className="zone-b-grey3 border border-white/20 w-full max-w-sm rounded-2xl shadow-2xl p-6 space-y-4"
+            >
+              {uploadStep === 'select' ? (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 id="catalog-upload-title" className="font-sans font-bold text-white text-[16px]">Upload product sheet</h3>
+                      <p className="text-[12px] text-white/50 font-sans mt-1">CSV or Excel (.xlsx), first row as column headers.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUploadStep('closed')}
+                      className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={(e) => {
+                      setUploadFile(e.target.files?.[0] || null);
+                      setUploadError('');
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => uploadInputRef.current?.click()}
+                    className="w-full border-2 border-dashed border-white/20 hover:border-white/40 rounded-xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-colors bg-white/[0.03]"
+                  >
+                    <FileSpreadsheet className="h-7 w-7 text-blue-400" />
+                    {uploadFile ? (
+                      <>
+                        <span className="text-[13px] font-sans font-semibold text-white break-all">{uploadFile.name}</span>
+                        <span className="text-[11px] text-white/40 font-sans">
+                          {(uploadFile.size / 1024).toFixed(uploadFile.size < 102_400 ? 1 : 0)} KB · click to choose another file
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[13px] font-sans font-bold text-white">Browse files</span>
+                    )}
+                  </button>
+
+                  {uploadError && (
+                    <div className="status-danger text-[11px] p-2.5 rounded-xl font-sans">{uploadError}</div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUploadStep('closed')}
+                      className="flex-1 py-2.5 text-xs font-bold font-sans text-white/60 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleImportConfirm}
+                      disabled={!uploadFile}
+                      className="flex-1 btn-light-primary py-2.5 text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Confirm & import
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center space-y-4 py-2">
+                  <RefreshCw className="h-7 w-7 text-blue-400 animate-spin mx-auto" />
+                  <div className="space-y-1">
+                    <h3 id="catalog-upload-title" className="font-sans font-bold text-white text-[16px]">
+                      {importProgress.total === 0 ? 'Reading file…' : 'Loading products…'}
+                    </h3>
+                    {importProgress.total > 0 && (
+                      <p className="text-[13px] text-white/60 font-sans">
+                        {importProgress.processed} of {importProgress.total} processed · {importProgress.created} loaded
+                      </p>
+                    )}
+                  </div>
+                  <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                      style={{ width: `${importProgress.total ? Math.round((importProgress.processed / importProgress.total) * 100) : 5}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-white/35 font-sans">Please keep this page open until the import finishes.</p>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Catalog loaded confirmation */}
+      <AnimatePresence>
+        {catalogLoaded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-loaded-title"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+              className="zone-b-grey3 border border-white/20 w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center space-y-4"
+            >
+              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 id="catalog-loaded-title" className="font-sans font-bold text-white text-[16px]">Done!</h3>
+                <p className="text-[13px] text-white/60 font-sans leading-relaxed">
+                  {catalogLoaded.total} product{catalogLoaded.total === 1 ? '' : 's'} from {catalogLoaded.source}{' '}
+                  {catalogLoaded.total === 1 ? 'is' : 'are'} now loaded in your product catalog.
+                </p>
+                {(catalogLoaded.updated !== undefined || catalogLoaded.skipped !== undefined) && (
+                  <p className="text-[11px] text-white/40 font-sans">
+                    {catalogLoaded.created ?? 0} new
+                    {catalogLoaded.updated !== undefined && ` · ${catalogLoaded.updated} updated`}
+                    {!!catalogLoaded.skipped && ` · ${catalogLoaded.skipped} skipped (already in catalog or invalid)`}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setCatalogLoaded(null);
+                  setActiveWizardId(null);
+                  onGoToCatalog();
+                }}
+                className="w-full btn-light-primary py-2.5 text-xs font-bold cursor-pointer"
+              >
+                OK
+              </button>
             </motion.div>
           </motion.div>
         )}

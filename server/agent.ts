@@ -1,6 +1,11 @@
 import { Type, FunctionDeclaration, FunctionCallingConfigMode, type Content } from '@google/genai';
 import { ai } from './gemini';
 import { detectReplyLanguage, replyTexts, type ReplyLanguage } from './replyLanguage';
+import { formatPrice, mostCommonCurrency } from '../shared/currency';
+
+const catalogCurrency = (catalog: AgentCatalogItem[]) => mostCommonCurrency(catalog.map((p) => p.currency));
+const productPriceLabel = (product: AgentCatalogItem, catalog: AgentCatalogItem[]) =>
+  formatPrice(product.price, product.currency || catalogCurrency(catalog));
 
 export interface AgentPersona {
   storeName?: string;
@@ -26,6 +31,7 @@ export interface AgentCatalogItem {
   inventory: number;
   status: string;
   imageUrl?: string;
+  currency?: string;
 }
 
 export interface AgentHistoryItem {
@@ -290,7 +296,7 @@ export function findUngroundedAmounts(replyText: string, allowed: Set<number>): 
 function describeToolResult(call: { name?: string; args?: Record<string, any> }, catalog: AgentCatalogItem[]): Record<string, unknown> {
   const args = call.args || {};
   const product = args.sku ? catalog.find((p) => p.sku === args.sku) : undefined;
-  const productInfo = product ? { productName: product.name, price: product.price, inStock: product.inventory } : {};
+  const productInfo = product ? { productName: product.name, price: productPriceLabel(product, catalog), inStock: product.inventory } : {};
   switch (call.name) {
     case 'ask_for_quantity':
       return { status: 'ok', ...productInfo, instruction: 'Tell the customer the price and ask how many units they want.' };
@@ -318,8 +324,8 @@ function toolFallbackText(
   const texts = replyTexts(lang);
   for (const call of toolCalls) {
     const product = call.args?.sku ? catalog.find((p) => p.sku === call.args!.sku) : undefined;
-    if (call.name === 'ask_for_quantity' && product) return texts.askQuantity(product.name, product.price);
-    if (call.name === 'show_product_image' && product) return texts.showProduct(product.name, product.price);
+    if (call.name === 'ask_for_quantity' && product) return texts.askQuantity(product.name, productPriceLabel(product, catalog));
+    if (call.name === 'show_product_image' && product) return texts.showProduct(product.name, productPriceLabel(product, catalog));
     if (call.name === 'flag_for_human_review') return texts.flaggedForReview();
   }
   return DEFAULT_REPLY_TEXT;
@@ -342,10 +348,12 @@ export async function generateAgentReply({
   orderState?: AgentOrderState;
 }): Promise<AgentReply> {
   const startedAt = Date.now();
+  const storeCurrency = catalogCurrency(catalog);
+  const money = (amount: number) => formatPrice(amount, storeCurrency);
   const catalogText = (promptCatalog ?? catalog)
     .map(
       (p) =>
-        `- Name: ${p.name}, SKU: ${p.sku}, Price: $${p.price}, Inventory: ${p.inventory} units, Status: ${p.status}, Photo available: ${p.imageUrl ? 'yes' : 'no'}`
+        `- Name: ${p.name}, SKU: ${p.sku}, Price: ${productPriceLabel(p, catalog)}, Inventory: ${p.inventory} units, Status: ${p.status}, Photo available: ${p.imageUrl ? 'yes' : 'no'}`
     )
     .join('\n');
 
@@ -395,9 +403,7 @@ export async function generateAgentReply({
     ? orderState.ongoingOrders
         .map(
           (o) =>
-            `- Order #${o.id.slice(-8).toUpperCase()}, Status: ${o.status}, Placed: ${o.createdAt}, Total: $${o.total.toFixed(
-              2
-            )}, Items: ${o.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`
+            `- Order #${o.id.slice(-8).toUpperCase()}, Status: ${o.status}, Placed: ${o.createdAt}, Total: ${money(o.total)}, Items: ${o.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}`
         )
         .join('\n')
     : 'No active ongoing orders.';
@@ -410,7 +416,7 @@ export async function generateAgentReply({
     orderStateDescription.push(`You just asked how many units of SKU "${orderState.awaitingQuantityFor}" they want. If their message contains a number, treat it as the quantity for that product.`);
   }
   if (orderState.pendingItem) {
-    orderStateDescription.push(`Customer wants ${orderState.pendingItem.quantity}x "${orderState.pendingItem.name}" at $${orderState.pendingItem.unitPrice.toFixed(2)} each (total $${orderState.pendingItem.lineTotal.toFixed(2)}). Waiting for their confirmation.`);
+    orderStateDescription.push(`Customer wants ${orderState.pendingItem.quantity}x "${orderState.pendingItem.name}" at ${money(orderState.pendingItem.unitPrice)} each (total ${money(orderState.pendingItem.lineTotal)}). Waiting for their confirmation.`);
   }
   if (orderState.awaitingContactDetails) {
     orderStateDescription.push(`Customer confirmed the items. Now collect BOTH their phone number and delivery address (both are required). When they share either, call capture_contact_details with the phone and address in their separate fields. Do NOT say the order is placed.`);
@@ -502,9 +508,9 @@ MULTILINGUAL SUPPORT:
 - REPLY LANGUAGE — always mirror the script and language of the customer's latest message:
   - Bangla script (e.g. "দাম কত?") → reply in Bangla script.
   - Banglish = Bangla words typed in English letters (e.g. "ami 2ta nibo", "dam koto?", "snowboard ta kinte chai") → reply in Banglish, written in English letters. Never switch to English or Bangla script for a Banglish customer.
-    Example: customer "multi managed snowboard ta nite chai" → "Multi-managed Snowboard er dam $629.95. Apni koyta nite chan?"
+    Example: customer "multi managed snowboard ta nite chai" → "Multi-managed Snowboard er dam ${money(629.95)}. Apni koyta nite chan?"
   - English → reply in English.
-- Product names, SKUs and prices stay exactly as written in the catalog in every language.
+- Product names, SKUs and prices stay exactly as written in the catalog in every language. Always quote prices with the same currency symbol/code shown in the catalog — never assume dollars.
 
 TONE: ${toneText}
 STYLE: ${styleText}

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { listOrders, updateOrderStatus, ApiOrder } from '../lib/api';
 import DashboardHeader from './DashboardHeader';
+import { Product } from '../types';
+import { formatPrice, getCatalogCurrency, getOrderCurrency } from '../../shared/currency';
 
-export default function OrdersPage() {
+export default function OrdersPage({ products = [] }: { products?: Product[] }) {
+  const storeCurrency = React.useMemo(() => getCatalogCurrency(products), [products]);
   const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -93,7 +96,7 @@ export default function OrdersPage() {
                           </td>
                           <td className="p-4 text-white/50">{phone || '—'}</td>
                           <td className="p-4 text-white/50 max-w-[240px] truncate" title={address}>{address || '—'}</td>
-                          <td className="p-4 font-sans text-white font-bold">${order.total.toFixed(2)}</td>
+                          <td className="p-4 font-sans text-white font-bold">{formatPrice(order.total, getOrderCurrency(order.items, products, storeCurrency))}</td>
                           <td className="p-4">
                             <select
                               value={order.status}
