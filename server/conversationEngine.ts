@@ -36,10 +36,52 @@ import {
 import { createOrderForConversation } from './orderCreation';
 import { extractPhone, splitContactDetails } from './contactDetails';
 import { detectReplyLanguage, replyTexts } from './replyLanguage';
-import { recognizeCatalogImage } from './imageRecognition';
+import { matchCatalogImage, recognizeCatalogImage, type ImageRecognitionResult, type VisualMatch } from './imageRecognition';
+import { headerTokens } from '../shared/catalogColumns';
 import { formatKnowledgeForPrompt, selectRelevantKnowledge } from './knowledgeBase';
 
 const isProduction = process.env.NODE_ENV === 'production';
+
+/** Text the webhooks store for a customer message that is only a photo. */
+export const IMAGE_PLACEHOLDER_TEXT = 'Customer sent an image.';
+
+const asAttributeRecord = (raw: unknown): Record<string, unknown> =>
+  raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+
+/** The product's color from a "Color"/"colour"/"color_name" column, if any. */
+function productColor(raw: unknown): string | undefined {
+  const entry = Object.entries(asAttributeRecord(raw)).find(([key, value]) =>
+    headerTokens(key).some((t) => t === 'color' || t === 'colour' || t === 'colors' || t === 'colours') && value != null && String(value).trim());
+  return entry ? String(entry[1]).trim().slice(0, 60) : undefined;
+}
+
+function buildRecognitionCatalog(products: { name: string; sku: string; price: unknown; description: string | null; imageUrl: string | null; rawAttributes: unknown }[]) {
+  return products.map((p) => ({
+    name: p.name,
+    sku: p.sku,
+    price: Number(p.price),
+    description: p.description,
+    imageUrl: resolveProductImageUrl(p),
+    attributes: summarizeAttributes(p.rawAttributes),
+  }));
+}
+
+/** Starts comparing a customer's photo with the store catalog right away (used during the reply wait). */
+export async function startCatalogImageMatch(storeId: string, image: Buffer): Promise<VisualMatch> {
+  const products = (await prisma.product.findMany({ where: { storeId } })).map((p) => ({ ...p, name: resolveProductName(p) }));
+  return matchCatalogImage(image, buildRecognitionCatalog(products));
+}
+
+/** Short "key: value" summary of a product's extra columns for image matching (no links/long text). */
+function summarizeAttributes(raw: unknown): string | undefined {
+  const parts = Object.entries(asAttributeRecord(raw))
+    .filter(([, value]) => value != null && typeof value !== 'object')
+    .map(([key, value]) => [key, String(value).trim()] as const)
+    .filter(([, value]) => value && value.length <= 120 && !/^https?:\/\//i.test(value))
+    .slice(0, 15)
+    .map(([key, value]) => `${key}: ${value}`);
+  return parts.length ? parts.join('; ') : undefined;
+}
 
 // Short customer-facing order reference (#XXXXXXXX), also used by the agent's cancel_order tool.
 const orderRef = (id: string) => id.slice(-8).toUpperCase();
@@ -152,6 +194,8 @@ export async function generateAndStoreAgentReply(
   conversation: { id: string; storeId: string; status: string; channelType: string; externalUserId: string | null; isComplaint: boolean },
   customerText: string,
   customerImage?: Buffer,
+  /** Visual catalog match already started when the photo arrived (see inboundBatcher). */
+  precomputedMatch?: Promise<VisualMatch>,
 ) {
   if (!isProduction) {
     console.log('[AGENT REPLY] generateAndStoreAgentReply — conversationId:', conversation.id, '| storeId:', conversation.storeId);
@@ -220,23 +264,36 @@ export async function generateAndStoreAgentReply(
     recentMessages.slice().reverse().map((message) => message.text),
   );
   persona.knowledgeContext = formatKnowledgeForPrompt(knowledge);
+  // The webhook stores "Customer sent an image." when a photo arrives without any words.
+  const hasCustomerWords = !!customerText.trim() && customerText.trim() !== IMAGE_PLACEHOLDER_TEXT;
   let agentCustomerText = customerText;
+  let imageMatch: ImageRecognitionResult | null = null;
+  let imageContext: string | undefined;
+  let imageMatchedProduct: (typeof products)[number] | undefined;
+  const describeProduct = (p: (typeof products)[number]) => {
+    const color = productColor(p.rawAttributes);
+    return `SKU ${p.sku}, name "${p.name}", price ${money(Number(p.price), getProductCurrency(p.rawAttributes))}${color ? `, color ${color}` : ''}, ${p.inventory > 0 ? `${p.inventory} in stock` : 'out of stock'}`;
+  };
   if (customerImage) {
-    const imageMatch = await recognizeCatalogImage(customerImage, catalog);
-    if (imageMatch.match === 'exact' && imageMatch.sku) {
-      const matchedProduct = catalog.find((item) => item.sku === imageMatch.sku);
-      agentCustomerText += `\n[Verified customer-image match: SKU ${imageMatch.sku}, product ${matchedProduct?.name || imageMatch.sku}, confidence ${imageMatch.confidence.toFixed(2)}. Answer using this catalog item only.]`;
-    } else if (imageMatch.match === 'ambiguous' && imageMatch.candidates.length > 0) {
-      agentCustomerText += `\n[Customer sent a product image. Possible catalog matches: ${imageMatch.candidates.map((item) => `${item.sku} (${item.confidence.toFixed(2)})`).join(', ')}. Ask the customer to choose; do not claim an exact match.]`;
-    } else {
-      agentCustomerText += '\n[Customer sent a product image, but no safe catalog match was found. Ask for a product name or clarification.]';
+    imageMatch = await recognizeCatalogImage(customerImage, buildRecognitionCatalog(products), hasCustomerWords ? customerText : '', precomputedMatch);
+    imageMatchedProduct = imageMatch.sku ? products.find((p) => p.sku === imageMatch!.sku) : undefined;
+    if (!isProduction) {
+      console.log('[IMAGE MATCH]', JSON.stringify({ match: imageMatch.match, sku: imageMatch.sku, confidence: imageMatch.confidence, intent: imageMatch.intent }));
     }
+    if (imageMatch.match === 'exact' && imageMatchedProduct) {
+      imageContext = `The photo is an EXACT match for: ${describeProduct(imageMatchedProduct)}. Answer the customer's request about this product; its photo is sent automatically.`;
+    } else if (imageMatch.match === 'similar' && imageMatchedProduct) {
+      imageContext = `We do NOT have the exact product in the photo. The closest similar product is: ${describeProduct(imageMatchedProduct)}. Tell the customer we don't have that exact item, offer this similar one (name, price, color) and answer their request about it; its photo is sent automatically.`;
+    } else {
+      imageContext = 'No product in the catalog resembles the photo. Tell the customer we don\'t have it and ask what they are looking for. Never invent a product.';
+    }
+    agentCustomerText += imageMatchedProduct ? ` ${imageMatchedProduct.name}` : '';
   }
   // Cap history sent to the model — an unbounded prompt grows with every message in a
   // long-running conversation, which slows down local LLM inference noticeably.
   const history = recentMessages.slice().reverse().slice(0, -1).map((m) => ({ sender: m.sender.toLowerCase(), text: m.text }));
   // Server-written replies follow the customer's language: Bangla script, Banglish, or English.
-  const texts = replyTexts(detectReplyLanguage(customerText, history.filter((h) => h.sender === 'customer').map((h) => h.text)));
+  const texts = replyTexts(detectReplyLanguage(hasCustomerWords ? customerText : '', history.filter((h) => h.sender === 'customer' && h.text !== IMAGE_PLACEHOLDER_TEXT).map((h) => h.text)));
 
   const existingCart: { sku: string; quantity: number }[] = (currentConversation.cart as any) || [];
 
@@ -290,6 +347,53 @@ export async function generateAndStoreAgentReply(
     address: conversationContact.address || lastOrderContact.address,
   };
 
+  // === CUSTOMER PHOTO — server-written reply for the common cases ===
+  // "Do you have this?" / price / photo alone → matched product's info + its catalog photo.
+  // Requests to stock the item → thank them; nothing is ever added to the catalog.
+  // Purchases and specific questions fall through to the model with the verified match.
+  if (imageMatch) {
+    const isAutopilot = conversation.status === 'AI_MANAGED';
+    let direct: { text: string; product?: (typeof products)[number] } | null = null;
+    if (imageMatch.match === 'unavailable') {
+      direct = { text: texts.imageReviewLater() };
+    } else if (imageMatch.intent === 'inventory_request' && imageMatch.match !== 'exact') {
+      direct = { text: texts.inventorySuggestion() };
+    } else if (imageMatch.match === 'none' || !imageMatchedProduct) {
+      direct = { text: texts.imageNoMatch() };
+    } else if (imageMatch.intent === 'inquiry' || imageMatch.intent === 'inventory_request') {
+      const p = imageMatchedProduct;
+      const price = money(Number(p.price), getProductCurrency(p.rawAttributes));
+      const color = productColor(p.rawAttributes);
+      direct = {
+        text: imageMatch.match === 'exact' ? texts.imageExactMatch(p.name, price, color) : texts.imageSimilarMatch(p.name, price, color),
+        product: p,
+      };
+    }
+
+    if (direct) {
+      const imageUrl = direct.product ? resolveProductImageUrl(direct.product) : undefined;
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          sender: 'AI',
+          text: direct.text,
+          imageUrl,
+          meta: { model: 'image-match', latencyMs: 0, responseTokens: 0, promptTokens: 0, fallback: false, imageMatch } as any,
+          pending: !isAutopilot,
+        },
+      });
+      // Remember the offered product so a "yes" next turn continues with it — unless a
+      // checkout/cancel step is in progress, which must not be overwritten.
+      const canPinProduct = direct.product && (parsedAWQ.kind === 'none' || parsedAWQ.kind === 'ask_qty');
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: new Date(), ...(canPinProduct ? { awaitingQuantityFor: direct.product!.sku } : {}) },
+      });
+      if (isAutopilot) await deliverAgentReply(conversation, direct.text, imageUrl);
+      return;
+    }
+  }
+
   const orderState = {
     // Pass null to the model when in CONFIRM/DETAILS/CANCEL_PENDING so it doesn't think
     // we're still waiting for a plain quantity answer.
@@ -337,6 +441,7 @@ export async function generateAndStoreAgentReply(
 
   const pinnedCatalogSkus = new Set(existingCart.map((c) => c.sku));
   if (pendingEncodedSku) pinnedCatalogSkus.add(pendingEncodedSku);
+  if (imageMatchedProduct) pinnedCatalogSkus.add(imageMatchedProduct.sku);
   const promptCatalog = selectRelevantCatalog(
     catalog,
     agentCustomerText,
@@ -344,7 +449,9 @@ export async function generateAndStoreAgentReply(
     pinnedCatalogSkus
   );
 
-  const result = await generateAgentReply({ message: customerText, history, persona, catalog, promptCatalog, orderState });
+  const result = await generateAgentReply({ message: customerText, history, persona, catalog, promptCatalog, orderState, imageContext });
+  // The customer asked about their photo: always show the matched catalog product's photo.
+  if (imageMatchedProduct && !result.showImageForSku) result.showImageForSku = imageMatchedProduct.sku;
   // Orders the model asked to cancel, resolved by #REF against this conversation's active orders only.
   const requestedCancelOrders = conversationOrders.filter((o) => result.cancelOrderRefs.includes(orderRef(o.id)));
   const isAutopilot = conversation.status === 'AI_MANAGED';

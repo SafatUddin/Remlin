@@ -246,6 +246,41 @@ export function replyTexts(lang: ReplyLanguage) {
         `${name} er dam protita ${price}. Apni koyta nite chan?`,
         `${name} এর দাম প্রতিটি ${price}। আপনি কয়টি নিতে চান?`,
       ),
+    imageExactMatch: (name: string, price: string, color?: string) =>
+      pick(
+        lang,
+        `Yes, we have this! ${name} — ${price}${color ? `, Color: ${color}` : ''}. Would you like to buy it?`,
+        `Ha, eta amader kache ache! ${name} — ${price}${color ? `, Color: ${color}` : ''}. Apni ki eta kinte chan?`,
+        `হ্যাঁ, এটা আমাদের কাছে আছে! ${name} — ${price}${color ? `, রং: ${color}` : ''}। আপনি কি এটা কিনতে চান?`,
+      ),
+    imageSimilarMatch: (name: string, price: string, color?: string) =>
+      pick(
+        lang,
+        `Sorry, we don't have the exact product you asked for, but here's a similar one: ${name} — ${price}${color ? `, Color: ${color}` : ''}. Would you like to buy it?`,
+        `Dukkhito, apni je product ta chaichen exact oita amader kache nei, tobe eta similar: ${name} — ${price}${color ? `, Color: ${color}` : ''}. Apni ki eta kinte chan?`,
+        `দুঃখিত, আপনি যে প্রোডাক্টটি চেয়েছেন ঠিক সেটি আমাদের কাছে নেই, তবে এটি কাছাকাছি: ${name} — ${price}${color ? `, রং: ${color}` : ''}। আপনি কি এটা কিনতে চান?`,
+      ),
+    imageNoMatch: () =>
+      pick(
+        lang,
+        `Sorry, we don't have any product like this right now. Could you tell us a bit more about what you're looking for?`,
+        `Dukkhito, eirokom kono product ekhon amader kache nei. Apni ki ektu bolben ki khujchen?`,
+        `দুঃখিত, এরকম কোনো প্রোডাক্ট এখন আমাদের কাছে নেই। আপনি কী খুঁজছেন একটু বলবেন?`,
+      ),
+    inventorySuggestion: () =>
+      pick(
+        lang,
+        `Thank you for your suggestion! We'll look into it.`,
+        `Apnar suggestion er jonno dhonnobad! Amra bishoyta dekhbo.`,
+        `আপনার পরামর্শের জন্য ধন্যবাদ! আমরা বিষয়টি দেখব।`,
+      ),
+    imageReviewLater: () =>
+      pick(
+        lang,
+        `Thanks for the photo! A team member will check it and get back to you shortly.`,
+        `Chobir jonno dhonnobad! Amader team shighroi dekhe apnake janabe.`,
+        `ছবির জন্য ধন্যবাদ! আমাদের টিম শীঘ্রই দেখে আপনাকে জানাবে।`,
+      ),
     showProduct: (name: string, price: string) =>
       pick(
         lang,

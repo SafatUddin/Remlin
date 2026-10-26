@@ -24,6 +24,7 @@ import {
 import { generateAgentReply } from '../agent';
 import { getProductCurrency } from '../../shared/currency';
 import { resolveProductName } from '../../shared/catalogColumns';
+import { localChatImagePath } from '../mediaStorage';
 import {
   getPageAccessTokenForStore,
   getWhatsAppCredentialsForStore,
@@ -48,6 +49,18 @@ const inboxMessageSelect = {
 
 export function createConversationsRouter(): express.Router {
   const router = express.Router();
+
+  // Customer chat photos saved on local disk (dev setups without Supabase Storage).
+  // Only the store that owns the conversation can load them.
+  router.get('/api/media/chat/:storeId/:file', requireAuth, (req: AuthedRequest, res) => {
+    const filePath = req.params.storeId === req.auth!.storeId ? localChatImagePath(req.params.storeId, req.params.file) : null;
+    if (!filePath) return res.sendStatus(404);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.sendStatus(404);
+    });
+  });
 
   // Derived, real-time notifications: unread/complaint conversations + low-stock products.
   // Computed on the fly rather than stored, since these all resolve naturally elsewhere

@@ -17,8 +17,14 @@
  */
 
 import crypto from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
 import multer from 'multer';
 import { createClient } from '@supabase/supabase-js';
+
+// Local fallback for customer chat photos when Supabase Storage isn't configured (local dev).
+const LOCAL_CHAT_MEDIA_DIR = path.join(process.cwd(), 'uploads', 'chat-media');
+const LOCAL_CHAT_FILE_PATTERN = /^[a-f0-9-]{36}\.(jpg|png|gif|webp)$/;
 
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
 export const MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -136,6 +142,36 @@ export async function deleteStoredImage(bucket: string, ownerId: string, imageUr
   } catch {
     // Best-effort deletion; never throw
   }
+}
+
+/**
+ * Saves a photo a customer sent in chat so the inbox can always show it — the channel's own
+ * media links expire (and WhatsApp's need the store's access token). Uses Supabase Storage
+ * when configured, otherwise a local folder served by the authenticated /api/media/chat route.
+ * Returns the URL to store on the message, or null if the bytes aren't a supported image.
+ */
+export async function saveChatImage(storeId: string, buffer: Buffer): Promise<string | null> {
+  const imgType = detectImageType(buffer);
+  if (!imgType) return null;
+  assertValidOwnerId(storeId);
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      return await uploadImage('products', `chat-${storeId}`, buffer);
+    } catch (err) {
+      console.error('Chat image upload to storage failed; saving locally instead');
+    }
+  }
+  const dir = path.join(LOCAL_CHAT_MEDIA_DIR, storeId);
+  await fs.mkdir(dir, { recursive: true });
+  const filename = `${crypto.randomUUID()}.${imgType.ext}`;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return `/api/media/chat/${storeId}/${filename}`;
+}
+
+/** Absolute path of a locally saved chat photo, or null for anything that isn't one. */
+export function localChatImagePath(storeId: string, filename: string): string | null {
+  if (!/^[a-z0-9_-]+$/i.test(storeId) || !LOCAL_CHAT_FILE_PATTERN.test(filename)) return null;
+  return path.join(LOCAL_CHAT_MEDIA_DIR, storeId, filename);
 }
 
 /** Multer factory: memoryStorage so we can inspect magic bytes before uploading. */

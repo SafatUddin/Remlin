@@ -95,7 +95,7 @@ export function toPublicConversation(c: any) {
     customerName: c.customerName || 'New Customer',
     avatarUrl: c.avatarUrl || undefined,
     platform: CHANNEL_TO_PLATFORM[c.channelType] || 'websocket',
-    lastMessage: last?.text || '',
+    lastMessage: last?.imageUrl && last.text?.trim() === 'Customer sent an image.' ? 'Sent a photo' : last?.text || '',
     time: last?.time || '',
     unread: !!last && last.sender === 'customer',
     status: STATUS_TO_FRONTEND[c.status] || 'AI Managed',

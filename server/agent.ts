@@ -339,6 +339,7 @@ export async function generateAgentReply({
   catalog = [],
   promptCatalog,
   orderState = {},
+  imageContext,
 }: {
   message: string;
   history?: AgentHistoryItem[];
@@ -346,6 +347,8 @@ export async function generateAgentReply({
   catalog?: AgentCatalogItem[];
   promptCatalog?: AgentCatalogItem[];
   orderState?: AgentOrderState;
+  /** Server-verified result of matching the customer's photo against the catalog. */
+  imageContext?: string;
 }): Promise<AgentReply> {
   const startedAt = Date.now();
   const storeCurrency = catalogCurrency(catalog);
@@ -487,6 +490,7 @@ UNDERSTANDING INTENT (Most Important):
 
 CHECKOUT RULES:
 - Never tell the customer their order has been placed — the system sends that message itself.
+- You cannot add, stock, list or change products, prices or inventory. If a customer asks you to add or start selling an item, thank them for the suggestion and say the team will look into it — never promise it will be added.
 - Before any order is placed, the customer's phone number and delivery address are always collected and re-confirmed, even if they were shared in an earlier conversation.
 - Phone number and address are separate pieces of information — always pass them in separate capture_contact_details fields.
 
@@ -520,7 +524,10 @@ BUSINESS KNOWLEDGE (use only when relevant; never invent details not present her
 ${persona?.knowledgeContext || 'No additional business knowledge is configured.'}
 
 PRODUCT CATALOG:
-${catalogText || 'No products available.'}`;
+${catalogText || 'No products available.'}${imageContext ? `
+
+CUSTOMER PHOTO (verified by the system — the customer's latest message refers to this photo):
+${imageContext}` : ''}`;
 
   if (!ai) {
     // Fallback to simple response if Gemini not available

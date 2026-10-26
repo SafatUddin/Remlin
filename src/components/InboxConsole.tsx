@@ -25,6 +25,22 @@ import { sendConversationMessage, approveDraftMessage, createOrderFromConversati
 import DashboardHeader from './DashboardHeader';
 import { formatPrice, getCatalogCurrency, getOrderCurrency, getProductCurrency } from '../../shared/currency';
 
+// Text the server stores for a customer message that is only a photo.
+const isPhotoPlaceholder = (text: string) => text.trim() === 'Customer sent an image.';
+
+/** A photo in the chat; click to open it full size. Older channel links can expire. */
+function ChatImage({ src, className }: { src: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <p className="mt-1 text-[12px] italic text-white/45">Photo is no longer available</p>;
+  }
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="block" title="Open photo">
+      <img src={src} alt="Customer photo" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className={className} />
+    </a>
+  );
+}
+
 // Helper function to format timestamp in merchant's local timezone
 function formatMessageTime(timestamp: string | Date): string {
   const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
@@ -158,6 +174,8 @@ export default function InboxConsole({
   const getChatDisplayName = (chat: Conversation) => {
     if (!chat) return '';
     if (chat.platform !== 'websocket') return chat.customerName;
+    // Website visitors are anonymous ("New Customer") unless a real name is on file.
+    if (chat.customerName && chat.customerName !== 'New Customer') return chat.customerName;
 
     let askedIndex = -1;
     for (let i = 0; i < chat.messages.length; i++) {
@@ -864,7 +882,7 @@ export default function InboxConsole({
                                 <span className="font-sans text-[10.5px] font-bold tracking-wider text-white uppercase">AI</span>
                               </div>
                             )}
-                            <p>{m.text.replace(/<[^>]+>/g, '').trim()}</p>
+                            {!(m.imageUrl && isPhotoPlaceholder(m.text)) && <p>{m.text.replace(/<[^>]+>/g, '').trim()}</p>}
                             {m.audioUrl && (
                               <div className="mt-2 space-y-2">
                                 <div className="flex items-center gap-2 text-[11px] text-white/60">
@@ -880,7 +898,10 @@ export default function InboxConsole({
                               </div>
                             )}
                             {m.imageUrl && (
-                              <img src={m.imageUrl} alt="" className="mt-2 rounded-xl max-w-[220px] max-h-[220px] object-cover border border-white/10" />
+                              <ChatImage
+                                src={m.imageUrl}
+                                className={`${isPhotoPlaceholder(m.text) ? '' : 'mt-2 '}rounded-xl max-w-[260px] max-h-[260px] object-cover border border-white/10`}
+                              />
                             )}
                           </div>
                           <span className="text-[10.5px] text-white/40 mt-1 px-1 font-mono">{formatMessageTime(m.time)}</span>

@@ -18,10 +18,12 @@ import {
   getPageAccessTokenForStore,
   getInstagramCredentialsForStore,
   getWhatsAppCredentialsForStore,
-  generateAndStoreAgentReply,
   sendOpeningGreetingIfNew,
+  IMAGE_PLACEHOLDER_TEXT,
 } from '../conversationEngine';
+import { handleInboundCustomerMessage } from '../inboundBatcher';
 import { downloadInboundImage } from '../imageRecognition';
+import { saveChatImage } from '../mediaStorage';
 import { downloadInboundAudio, transcribeVoiceMessage } from '../voiceMessages';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -109,9 +111,12 @@ export function createWebhooksRouter(): express.Router {
       conversation = await prisma.conversation.update({ where: { id: conversation.id }, data: updateData });
     }
 
+    // Keep our own copy of the photo: channel media links expire / need the store's token.
+    const savedImageUrl = imageBuffer ? await saveChatImage(storeId, imageBuffer).catch(() => null) : null;
+
     try {
       await prisma.message.create({
-        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
+        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl: savedImageUrl || imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
       });
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -123,8 +128,9 @@ export function createWebhooksRouter(): express.Router {
     }
 
     const greetedInstead = await sendOpeningGreetingIfNew(isNewConversation, conversation);
-    if (!greetedInstead) {
-      await generateAndStoreAgentReply(conversation, agentText, imageBuffer);
+    // A photo is still matched against the catalog even when the greeting answered the first message.
+    if (!greetedInstead || imageBuffer) {
+      await handleInboundCustomerMessage(conversation, agentText, imageBuffer);
     }
   }
 
@@ -207,9 +213,12 @@ export function createWebhooksRouter(): express.Router {
       });
     }
 
+    // Keep our own copy of the photo: channel media links expire / need the store's token.
+    const savedImageUrl = imageBuffer ? await saveChatImage(storeId, imageBuffer).catch(() => null) : null;
+
     try {
       await prisma.message.create({
-        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
+        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl: savedImageUrl || imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
       });
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -220,8 +229,9 @@ export function createWebhooksRouter(): express.Router {
     }
 
     const greetedInstead = await sendOpeningGreetingIfNew(isNewConversation, conversation);
-    if (!greetedInstead) {
-      await generateAndStoreAgentReply(conversation, agentText, imageBuffer);
+    // A photo is still matched against the catalog even when the greeting answered the first message.
+    if (!greetedInstead || imageBuffer) {
+      await handleInboundCustomerMessage(conversation, agentText, imageBuffer);
     }
   }
 
@@ -268,9 +278,12 @@ export function createWebhooksRouter(): express.Router {
       conversation = await prisma.conversation.update({ where: { id: conversation.id }, data: updateData });
     }
 
+    // Keep our own copy of the photo: channel media links expire / need the store's token.
+    const savedImageUrl = imageBuffer ? await saveChatImage(storeId, imageBuffer).catch(() => null) : null;
+
     try {
       await prisma.message.create({
-        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
+        data: { conversationId: conversation.id, sender: 'CUSTOMER', text: messageText, imageUrl: savedImageUrl || imageUrl, audioUrl, transcript, mediaType: audioUrl ? 'audio' : imageUrl ? 'image' : undefined, externalId: externalMessageId },
       });
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -281,8 +294,9 @@ export function createWebhooksRouter(): express.Router {
     }
 
     const greetedInstead = await sendOpeningGreetingIfNew(isNewConversation, conversation);
-    if (!greetedInstead) {
-      await generateAndStoreAgentReply(conversation, agentText, imageBuffer);
+    // A photo is still matched against the catalog even when the greeting answered the first message.
+    if (!greetedInstead || imageBuffer) {
+      await handleInboundCustomerMessage(conversation, agentText, imageBuffer);
     }
   }
 
@@ -312,7 +326,7 @@ export function createWebhooksRouter(): express.Router {
             const audioUrl = event.message?.attachments?.find((attachment: any) => attachment.type === 'audio')?.payload?.url;
             if (!senderPsid || (!messageText && !imageUrl && !audioUrl) || !messageId || event.message?.is_echo) continue;
 
-            await handleIncomingMessengerMessage(pageId, senderPsid, messageText || (audioUrl ? 'Customer sent a voice message.' : 'Customer sent an image.'), messageId, imageUrl, undefined, audioUrl);
+            await handleIncomingMessengerMessage(pageId, senderPsid, messageText || (audioUrl ? 'Customer sent a voice message.' : IMAGE_PLACEHOLDER_TEXT), messageId, imageUrl, undefined, audioUrl);
           }
 
           // Handle Facebook Post Comment webhooks (feed field)
@@ -391,7 +405,7 @@ export function createWebhooksRouter(): express.Router {
             const audioUrl = event.message?.attachments?.find((attachment: any) => attachment.type === 'audio')?.payload?.url;
             if (!senderIgUserId || (!messageText && !imageUrl && !audioUrl) || !messageId || event.message?.is_echo) continue;
 
-            await handleIncomingInstagramMessage(igAccountId, senderIgUserId, messageText || (audioUrl ? 'Customer sent a voice message.' : 'Customer sent an image.'), messageId, imageUrl, undefined, audioUrl);
+            await handleIncomingInstagramMessage(igAccountId, senderIgUserId, messageText || (audioUrl ? 'Customer sent a voice message.' : IMAGE_PLACEHOLDER_TEXT), messageId, imageUrl, undefined, audioUrl);
           }
 
           // Handle Instagram Post Comment webhooks (comments field)
@@ -464,7 +478,7 @@ export function createWebhooksRouter(): express.Router {
                 ? msg.text?.body
                 : msg.type === 'audio'
                   ? 'Customer sent a voice message.'
-                  : msg.image?.caption || 'Customer sent an image.';
+                  : msg.image?.caption || IMAGE_PLACEHOLDER_TEXT;
               const externalMessageId = msg.id;
               const contact = contacts.find((c: any) => c.wa_id === senderWaId);
               const customerName = contact?.profile?.name;
