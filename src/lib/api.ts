@@ -427,6 +427,21 @@ export function connectWhatsAppChannel(input: { phoneNumberId: string; accessTok
   });
 }
 
+export interface WhatsAppPairingState {
+  status: 'idle' | 'starting' | 'qr' | 'connected' | 'error';
+  qr: string | null;
+  phone: string | null;
+  error: string | null;
+}
+
+export function startWhatsAppPairing() {
+  return request<WhatsAppPairingState>('/api/channels/local/whatsapp/start', { method: 'POST' });
+}
+
+export function getWhatsAppPairingStatus() {
+  return request<WhatsAppPairingState>('/api/channels/local/whatsapp/status');
+}
+
 export function connectWidgetChannel() {
   return request<{ success: boolean; widgetKey: string }>('/api/channels/widget/connect', {
     method: 'POST',

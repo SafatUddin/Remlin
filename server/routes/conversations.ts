@@ -32,6 +32,7 @@ import {
   selectRelevantCatalog,
   generateAndStoreAgentReply,
 } from '../conversationEngine';
+import { deliverChannelMessage } from '../channels/outbound';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -264,7 +265,9 @@ export function createConversationsRouter(): express.Router {
         await prisma.message.create({ data: { conversationId: conversation.id, sender: 'MERCHANT', text } });
         await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } });
 
-        if (conversation.channelType === 'FACEBOOK' && conversation.externalUserId) {
+        if (await deliverChannelMessage(conversation, text)) {
+          // WhatsApp: delivered through the linked-device (QR) session
+        } else if (conversation.channelType === 'FACEBOOK' && conversation.externalUserId) {
           const pageAccessToken = await getPageAccessTokenForStore(conversation.storeId);
           if (pageAccessToken) {
             try {
@@ -275,7 +278,7 @@ export function createConversationsRouter(): express.Router {
           }
         }
 
-        if (conversation.channelType === 'WHATSAPP' && conversation.externalUserId) {
+        else if (conversation.channelType === 'WHATSAPP' && conversation.externalUserId) {
           const waCreds = await getWhatsAppCredentialsForStore(conversation.storeId);
           if (waCreds) {
             try {
@@ -286,7 +289,7 @@ export function createConversationsRouter(): express.Router {
           }
         }
 
-        if (conversation.channelType === 'INSTAGRAM' && conversation.externalUserId) {
+        else if (conversation.channelType === 'INSTAGRAM' && conversation.externalUserId) {
           const igCreds = await getInstagramCredentialsForStore(conversation.storeId);
           if (igCreds) {
             try {
@@ -332,7 +335,9 @@ export function createConversationsRouter(): express.Router {
         return res.status(404).json({ error: 'Pending draft not found' });
       }
 
-      if (conversation.channelType === 'FACEBOOK' && conversation.externalUserId) {
+      if (await deliverChannelMessage(conversation, message.text, message.imageUrl || undefined)) {
+        // WhatsApp: delivered through the linked-device (QR) session
+      } else if (conversation.channelType === 'FACEBOOK' && conversation.externalUserId) {
         const pageAccessToken = await getPageAccessTokenForStore(conversation.storeId);
         if (pageAccessToken) {
           try {
@@ -344,7 +349,7 @@ export function createConversationsRouter(): express.Router {
         }
       }
 
-      if (conversation.channelType === 'WHATSAPP' && conversation.externalUserId) {
+      else if (conversation.channelType === 'WHATSAPP' && conversation.externalUserId) {
         const waCreds = await getWhatsAppCredentialsForStore(conversation.storeId);
         if (waCreds) {
           try {
@@ -356,7 +361,7 @@ export function createConversationsRouter(): express.Router {
         }
       }
 
-      if (conversation.channelType === 'INSTAGRAM' && conversation.externalUserId) {
+      else if (conversation.channelType === 'INSTAGRAM' && conversation.externalUserId) {
         const igCreds = await getInstagramCredentialsForStore(conversation.storeId);
         if (igCreds) {
           try {

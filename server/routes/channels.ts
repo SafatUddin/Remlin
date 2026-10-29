@@ -33,6 +33,7 @@ import {
   isUniqueConstraintError,
   CHANNEL_ALREADY_CONNECTED_MESSAGE,
 } from '../channelSecurity';
+import { disconnectWhatsApp } from '../channels/whatsapp';
 import { CHANNEL_TYPE_TO_FRONTEND } from '../publicViews';
 import { assertCatalogSourceAvailable, getCatalogSource, isCatalogSource, setCatalogSource } from '../catalogSource';
 
@@ -129,6 +130,7 @@ export function createChannelsRouter(): express.Router {
   router.delete('/api/channels/:type', requireAuth, requireProfileComplete, async (req: AuthedRequest, res) => {
     try {
       const type = req.params.type.toUpperCase();
+      if (type === 'WHATSAPP') await disconnectWhatsApp(req.auth!.storeId);
       await prisma.channel.updateMany({
         where: { storeId: req.auth!.storeId, type: type as any },
         data: { connected: false, credentials: null, externalId: null },
@@ -570,26 +572,8 @@ export function createChannelsRouter(): express.Router {
       const userAccessToken = await exchangeCodeForUserToken(code, redirectUri);
 
       const pages = await listManagedPages(userAccessToken);
-      const waAccounts = await listWhatsAppPhoneNumbers(userAccessToken);
-
-      const allWaNumbers: { id: string; display_phone_number: string; name?: string; token: string }[] = [];
-      for (const acc of waAccounts) {
-        for (const num of acc.phoneNumbers) {
-          allWaNumbers.push({
-            id: num.id,
-            display_phone_number: num.display_phone_number || num.verified_name || num.id,
-            name: acc.wabaName,
-            token: userAccessToken,
-          });
-        }
-      }
-
       if (pages.length === 1) {
         await finalizeFacebookConnection(storeId, pages[0]);
-      }
-
-      if (allWaNumbers.length === 1) {
-        await finalizeWhatsAppConnection(storeId, allWaNumbers[0]);
       }
 
       // Multi-select: store provider tokens server-side; browser only gets an opaque pending code.
@@ -602,20 +586,11 @@ export function createChannelsRouter(): express.Router {
         return res.redirect(`${frontendBase}/#integrations?fbPending=${encodeURIComponent(pendingCode)}`);
       }
 
-      if (allWaNumbers.length > 1) {
-        const waPendingCode = await createOAuthHandoff({
-          purpose: 'whatsapp_pending',
-          storeId,
-          payload: { numbers: allWaNumbers },
-        });
-        return res.redirect(`${frontendBase}/#integrations?waPending=${encodeURIComponent(waPendingCode)}`);
-      }
-
-      if (pages.length === 0 && allWaNumbers.length === 0) {
+      if (pages.length === 0) {
         return res.redirect(`${frontendBase}/#integrations?fbError=no_pages`);
       }
 
-      return res.redirect(`${frontendBase}/#integrations?fbConnected=1&waConnected=1`);
+      return res.redirect(`${frontendBase}/#integrations?fbConnected=1`);
     } catch (err) {
       if (isChannelOwnershipError(err)) {
         return res.redirect(`${frontendBase}/#integrations?fbError=already_connected`);

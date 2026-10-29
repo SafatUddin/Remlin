@@ -151,6 +151,32 @@ model Channel {
   @@unique([type, externalId])
 }
 
+// Public comments (Facebook / Instagram posts) the open-source comment workers have
+// already handled, so a comment is never answered twice. replied=false marks comments
+// that were only recorded (pre-existing backlog or skipped) and never answered.
+model RepliedComment {
+  id          String      @id @default(cuid())
+  storeId     String
+  channelType ChannelType
+  commentId   String
+  postId      String?
+  replied     Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  @@unique([storeId, channelType, commentId])
+  @@index([storeId, channelType])
+}
+
+// WhatsApp (Baileys) auth credentials and signal keys, kept in the database so a pairing
+// survives redeploys on hosts with an ephemeral filesystem. Values are Baileys-serialized JSON.
+model WhatsAppAuthState {
+  channelId String
+  key       String
+  value     String @db.Text
+
+  @@id([channelId, key])
+}
+
 // Idempotency ledger for webhook/events that do not create a Message row
 // (e.g. Meta comment bots). Message.externalId covers Messenger/WA/IG DMs.
 // Stores only provider + event id — never full payloads or customer PII.

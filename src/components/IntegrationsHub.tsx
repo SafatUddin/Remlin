@@ -45,6 +45,7 @@ import {
   createProductsBulk,
   BulkProductInput,
 } from '../lib/api';
+import { WhatsAppQrModal } from './LocalChannelConnect';
 import DashboardHeader from './DashboardHeader';
 import { readSpreadsheet } from '../lib/spreadsheet';
 
@@ -91,6 +92,9 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
   const [activeWizardId, setActiveWizardId] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [isSimulatingSync, setIsSimulatingSync] = useState(false);
+
+  // WhatsApp connects by scanning a QR code (linked device)
+  const [showWhatsAppQr, setShowWhatsAppQr] = useState(false);
 
   // Real Facebook, Instagram & WhatsApp connection state
   const [fbConnected, setFbConnected] = useState(false);
@@ -889,7 +893,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                           if (waConnected) {
                             handleWhatsAppDisconnect();
                           } else {
-                            handleConnectClick(item);
+                            setShowWhatsAppQr(true);
                           }
                         } else if (item.id === 'int-widget') {
                           if (widgetConnected) {
@@ -1726,6 +1730,11 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* WhatsApp QR pairing */}
+      <AnimatePresence>
+        {showWhatsAppQr && <WhatsAppQrModal onClose={() => setShowWhatsAppQr(false)} onConnected={refreshChannelsStatus} />}
       </AnimatePresence>
 
       {/* Facebook multi-Page picker */}

@@ -103,6 +103,7 @@ import {
   saveOpeningImageFile,
   deleteOpeningImageFile,
   MAX_OPENING_IMAGE_BYTES,
+  ensureStorageBuckets,
 } from './server/mediaStorage';
 import { authLimiter, aiLimiter, widgetLimiter } from './server/rateLimiters';
 import {
@@ -129,6 +130,8 @@ import { createConversationsRouter } from './server/routes/conversations';
 import { createProfileRouter } from './server/routes/profile';
 import { createAuthRouter } from './server/routes/auth';
 import { createChannelsRouter } from './server/routes/channels';
+import { createLocalChannelsRouter } from './server/routes/localChannels';
+import { startChannelAdapters } from './server/channels';
 import { createAdminRouter } from './server/routes/admin';
 import { createKnowledgeRouter } from './server/routes/knowledge';
 import { createAppointmentsRouter } from './server/routes/appointments';
@@ -194,6 +197,7 @@ async function startServer() {
   app.use(createConversationsRouter());
   app.use(createProfileRouter());
   app.use(createAuthRouter());
+  app.use(createLocalChannelsRouter());
   app.use(createChannelsRouter());
   app.use(createAdminRouter());
   app.use(createKnowledgeRouter());
@@ -251,6 +255,8 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+    void ensureStorageBuckets().catch((err) => console.error('[storage] bucket check failed:', err?.message));
+    void startChannelAdapters().catch((err) => console.error('Channel adapters failed to start:', err?.message));
   });
 }
 

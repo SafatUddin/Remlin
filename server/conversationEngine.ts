@@ -17,6 +17,7 @@ import {
   sendInstagramMessage,
   sendInstagramImage,
 } from './meta';
+import { deliverChannelMessage } from './channels/outbound';
 import {
   parseAwaitingQuantityFor,
   sanitizeAskQuantityForSku,
@@ -890,6 +891,7 @@ async function deliverAgentReply(
   imageUrl?: string,
 ) {
   if (!conversation.externalUserId) return;
+  if (await deliverChannelMessage(conversation, text, imageUrl)) return;
 
   if (conversation.channelType === 'FACEBOOK') {
     const pageAccessToken = await getPageAccessTokenForStore(conversation.storeId);
@@ -955,6 +957,7 @@ export async function sendOpeningGreetingIfNew(
 
   if (!isAutopilot || !conversation.externalUserId) return true;
   try {
+    if (await deliverChannelMessage(conversation, store.openingText, store.openingImageUrl || undefined)) return true;
     if (conversation.channelType === 'FACEBOOK') {
       const pageAccessToken = await getPageAccessTokenForStore(conversation.storeId);
       if (pageAccessToken) {

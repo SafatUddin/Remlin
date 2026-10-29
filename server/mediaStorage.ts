@@ -39,6 +39,30 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+const STORAGE_BUCKETS = ['avatars', 'products'];
+
+/** Whether images go to Supabase Storage (otherwise chat photos fall back to local disk). */
+export const isSupabaseStorageConfigured = () => !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+/** Creates the public buckets this app writes to if they don't exist yet (run once at startup). */
+export async function ensureStorageBuckets(): Promise<void> {
+  if (!isSupabaseStorageConfigured()) {
+    console.warn('[storage] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set: chat photos are saved to local disk and are lost on redeploy.');
+    return;
+  }
+  const supabase = getSupabase();
+  const { data, error } = await supabase.storage.listBuckets();
+  if (error) {
+    console.error('[storage] Could not reach Supabase Storage:', error.message);
+    return;
+  }
+  const existing = new Set((data || []).map((b) => b.name));
+  for (const name of STORAGE_BUCKETS.filter((b) => !existing.has(b))) {
+    const { error: createError } = await supabase.storage.createBucket(name, { public: true });
+    console.log(createError ? `[storage] Failed to create bucket "${name}": ${createError.message}` : `[storage] Created public bucket "${name}"`);
+  }
+}
+
 function publicUrlPrefix(bucket: string): string {
   const base = process.env.SUPABASE_URL || 'https://example.supabase.co';
   return `${base}/storage/v1/object/public/${bucket}/`;
@@ -154,11 +178,11 @@ export async function saveChatImage(storeId: string, buffer: Buffer): Promise<st
   const imgType = detectImageType(buffer);
   if (!imgType) return null;
   assertValidOwnerId(storeId);
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (isSupabaseStorageConfigured()) {
     try {
       return await uploadImage('products', `chat-${storeId}`, buffer);
     } catch (err) {
-      console.error('Chat image upload to storage failed; saving locally instead');
+      console.error('Chat image upload to Supabase failed; saving locally instead:', (err as Error)?.message);
     }
   }
   const dir = path.join(LOCAL_CHAT_MEDIA_DIR, storeId);

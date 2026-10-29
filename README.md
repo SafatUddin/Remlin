@@ -158,6 +158,8 @@ flowchart LR
 3. Run the app:
    `npm run dev`
 
+**Channels:** WhatsApp connects by scanning a QR code from the Integrations page (the pairing is stored in the database, so it survives restarts and redeploys; run a single instance). Facebook and Instagram connect through the official Meta login (see `.env.example`). On Railway: push the repo, paste your `.env` into the service variables and deploy; the Dockerfile and `railway.json` handle the rest.
+
 ## Documentation
 
 Project docs live in [`docs/`](./docs/) — architecture notes, the AI agent's
