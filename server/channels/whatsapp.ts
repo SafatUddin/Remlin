@@ -23,10 +23,22 @@ interface WaSession {
   error: string | null;
   stopped: boolean;
   adapter: DmAdapter;
+  flush?: () => Promise<void>;
 }
 
 const sessions = new Map<string, WaSession>();
 const logger = pino({ level: 'silent' });
+
+// libsignal prints full session dumps with console.info/warn on every key rotation; hide only those.
+const SIGNAL_NOISE = /^(Closing session|Closing open session|Opening session|Removing old closed session|Migrating session to|Session already closed|Session already open)/;
+for (const method of ['info', 'warn', 'log'] as const) {
+  const original = console[method].bind(console);
+  console[method] = (...args: unknown[]) => {
+    if (typeof args[0] === 'string' && SIGNAL_NOISE.test(args[0])) return;
+    original(...args);
+  };
+}
+const log = (...args: unknown[]) => console.log('[whatsapp]', ...args);
 
 const toJid = (id: string) => (id.includes('@') ? id : `${id}@s.whatsapp.net`);
 const digits = (jid: string) => jid.split('@')[0].split(':')[0];
@@ -77,9 +89,14 @@ async function connect(session: WaSession) {
   const makeWASocket = baileys.default?.default ?? baileys.default ?? baileys.makeWASocket;
   const { DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = baileys;
 
-  const { state, saveCreds } = await useDbAuthState(session.channelId);
-  const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
-  const sock = makeWASocket({ auth: state, version, logger, printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false });
+  const { state, saveCreds, flush } = await useDbAuthState(session.channelId);
+  session.flush = flush;
+  if (!state.creds.registered) {
+    // Not paired (first time, unlinked from the phone, or auth data missing): never show "Connected".
+    await prisma.channel.updateMany({ where: { id: session.channelId, connected: true }, data: { connected: false, externalId: null } });
+  }
+  const latest = await fetchLatestBaileysVersion().catch(() => null);
+  const sock = makeWASocket({ auth: state, browser: ['Remlin', 'Chrome', '1.0.0'], ...(latest?.version ? { version: latest.version } : {}), logger, printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false });
   session.sock = sock;
 
   sock.ev.on('creds.update', saveCreds);
@@ -91,6 +108,7 @@ async function connect(session: WaSession) {
       session.qr = await QRCode.toDataURL(qr, { margin: 1, width: 320 });
       session.status = 'qr';
     }
+    if (connection) log('connection', connection, session.channelId);
     if (connection === 'open') {
       const phone = digits(sock.user?.id || '');
       try {
@@ -116,6 +134,7 @@ async function connect(session: WaSession) {
         return;
       }
       session.status = 'starting';
+      await session.flush?.().catch(() => undefined);
       setTimeout(() => {
         if (!session.stopped) connect(session).catch((err) => {
           session.status = 'error';
@@ -127,6 +146,7 @@ async function connect(session: WaSession) {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
+    log('messages.upsert', type, messages.length);
     if (type !== 'notify') return;
     for (const msg of messages) {
       try {
@@ -140,13 +160,21 @@ async function connect(session: WaSession) {
 
 async function handleMessage(session: WaSession, sock: any, msg: any, downloadMediaMessage: any) {
   const jid: string | undefined = msg.key?.remoteJid;
-  if (!jid || jid === 'status@broadcast' || msg.key.fromMe === true || jid.endsWith('@g.us') || jid.endsWith('@broadcast') || !msg.message) return;
+  if (!jid || jid === 'status@broadcast' || msg.key.fromMe === true || jid.endsWith('@g.us') || jid.endsWith('@broadcast')) return;
+  if (!msg.message) {
+    log('skipped message without content (not decrypted yet?)', msg.messageStubType ?? '');
+    return;
+  }
 
   const content = msg.message.ephemeralMessage?.message || msg.message;
   const text: string | undefined = content.conversation || content.extendedTextMessage?.text || content.imageMessage?.caption;
   const hasImage = !!content.imageMessage;
   const hasAudio = !!content.audioMessage;
-  if (!text && !hasImage && !hasAudio) return;
+  if (!text && !hasImage && !hasAudio) {
+    log('skipped unsupported message type', Object.keys(content).join(','));
+    return;
+  }
+  log('incoming message', hasImage ? 'image' : hasAudio ? 'audio' : 'text');
 
   const phoneJid: string | undefined = msg.key.remoteJidAlt || (jid.endsWith('@s.whatsapp.net') ? jid : undefined);
   const externalUserId = phoneJid ? digits(phoneJid) : jid;
@@ -175,6 +203,7 @@ async function handleMessage(session: WaSession, sock: any, msg: any, downloadMe
 async function stopSession(session: WaSession, wipeAuth: boolean) {
   session.stopped = true;
   unregisterAdapter(session.storeId, 'WHATSAPP', session.adapter);
+  if (!wipeAuth) await session.flush?.().catch(() => undefined);
   try {
     if (wipeAuth) await session.sock?.logout?.().catch(() => undefined);
     session.sock?.end?.(undefined);
@@ -200,5 +229,14 @@ export async function disconnectWhatsApp(storeId: string) {
 
 export async function restoreWhatsApp() {
   const channels = await prisma.channel.findMany({ where: { type: 'WHATSAPP', connected: true } });
-  for (const c of channels) await startWhatsApp(c.storeId).catch((err) => console.error('WhatsApp restore failed:', err?.message));
+  for (const c of channels) {
+    const creds = await prisma.whatsAppAuthState.findUnique({ where: { channelId_key: { channelId: c.id, key: 'creds' } } });
+    if (!creds) {
+      // Marked connected but no stored pairing (e.g. data from an older build): show it as disconnected.
+      await prisma.channel.update({ where: { id: c.id }, data: { connected: false, externalId: null } });
+      log('no stored pairing for channel, marked disconnected', c.id);
+      continue;
+    }
+    await startWhatsApp(c.storeId).catch((err) => console.error('WhatsApp restore failed:', err?.message));
+  }
 }
