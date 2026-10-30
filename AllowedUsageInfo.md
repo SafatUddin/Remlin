@@ -124,11 +124,8 @@ same permission; 62 calls already logged).
 2. From a second account, comment "price?" / "dam koto?"
 3. Show Remlin detecting it and the automation firing.
 
-**API test calls:** ⚠️ Probed — `GET /{post-id}/comments` was called (returned
-#10 because the permission isn't granted yet — the request still registers).
-To make a real call: in Graph API Explorer (developers.facebook.com/tools/explorer),
-select app **Remlin**, generate a token for your Page, then run
-`GET /{post-id}/comments` — it will error until approval, which is fine.
+**API test calls:** ✅ Done — `GET /{post-id}/comments` returned 200 using a
+token with `pages_read_user_content` granted via Graph API Explorer.
 
 ---
 
@@ -149,9 +146,8 @@ select app **Remlin**, generate a token for your Page, then run
    pages_manage_engagement, pages_messaging and Business Asset User Profile
    Access.
 
-**API test calls:** ⚠️ Endpoint probed — a real `POST /{comment-id}/comments`
-call happens automatically when you record the screencast above. No extra
-action needed.
+**API test calls:** ✅ Done — a real `POST /{post-id}/comments` was made via
+Graph API Explorer token (test comment created then deleted).
 
 **⚠️ Submission dependency:** Meta requires `pages_read_user_content` in the
 same submission — make sure both are added to the Pages use case.
@@ -358,11 +354,11 @@ app 1792276412190701:
 | pages_manage_metadata | `GET /{page}/subscribed_apps` | ✅ 200 |
 | pages_messaging | `GET /{page}/conversations` | ✅ 200 |
 | pages_read_engagement | `GET /{page}/posts` `/published_posts` `/photos` | ✅ 200 |
-| pages_read_user_content | `GET /{post}/comments` | ⚠️ probed (#10, expected pre-approval) |
-| pages_manage_engagement | `POST /{comment}/comments` | ⚠️ probed (registers endpoint) |
+| pages_read_user_content | `GET /{post}/comments` | ✅ 200 |
+| pages_manage_engagement | `POST /{post}/comments` + DELETE | ✅ 200 |
 | instagram_basic | `GET /{ig-user}` | ✅ 200 |
 | instagram_manage_messages | `GET /{ig-user}/conversations` | ✅ 200 |
-| instagram_manage_comments | `GET /{ig}/media`, `/{media}/comments`, POST probe | ✅ 200 |
+| instagram_manage_comments | `GET /{ig}/media`, `/{media}/comments`, POST `/{media}/comments` + DELETE | ✅ 200 |
 | whatsapp_business_management | `GET /{waba}/phone_numbers`, `/{phone-number-id}` | ✅ 200 |
 | whatsapp_business_messaging | `POST /{phone-number-id}/messages` | ✅ probed (endpoint hit) |
 | business_management | `GET /me/businesses`, `/{biz}/owned_whatsapp_business_accounts` | ✅ 200 |
