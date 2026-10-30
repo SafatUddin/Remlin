@@ -595,7 +595,7 @@ export function createChannelsRouter(): express.Router {
       if (isChannelOwnershipError(err)) {
         return res.redirect(`${frontendBase}/#integrations?fbError=already_connected`);
       }
-      console.error('Meta OAuth callback error');
+      console.error('Meta OAuth callback error:', err instanceof Error ? err.message : 'unknown');
       res.redirect(`${frontendBase}/#integrations?fbError=server_error`);
     }
   });

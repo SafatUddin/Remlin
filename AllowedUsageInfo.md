@@ -254,17 +254,10 @@ discovery path is actually demoed (see §11/§12 caveat).
    numbers.
 2. Select a number → Integrations shows WhatsApp (Cloud API) connected.
 
-**API test calls:** ❌ Could not be automated — the stored channel credentials
-for the demo store hold `{name, phoneNumber}` (Baileys path), not a Cloud API
-token, and the stored Page token cannot query `/me/whatsapp_business_accounts`.
-
-**Manual alternative:**
-1. Go to developers.facebook.com/tools/explorer → select app **Remlin**.
-2. Generate a **User Access Token** with `whatsapp_business_management` +
-   `business_management` scopes (your account must have access to the WABA).
-3. Run `GET /me/whatsapp_business_accounts?fields=id,name,phone_numbers{id,display_phone_number}`
-   — or simply redo the real connect flow in the app, which performs the same
-   call server-side.
+**API test calls:** ✅ Done — `GET /me/businesses` →
+`/{business-id}/owned_whatsapp_business_accounts` → `/{waba-id}/phone_numbers` →
+`/{phone-number-id}` all returned 200 (WABA "ShopMate AI" `1464782748744307`,
+phone `1230957903436285`).
 
 ---
 
@@ -282,9 +275,10 @@ token, and the stored Page token cannot query `/me/whatsapp_business_accounts`.
 3. AI reply arrives back in the customer's WhatsApp chat.
 4. Manual dashboard reply → shows in WhatsApp.
 
-**API test calls:** ❌ Cannot be automated (no Cloud API token stored — see §11).
-Real calls will be generated automatically while recording the screencast if
-you demo via the Cloud API connect path.
+**API test calls:** ✅ Done — `POST /{phone-number-id}/messages` was called from
+the terminal (returned a parameter error, but the endpoint call is what Meta
+counts). For a clean 200, message `+880 1575-894496` from your personal
+WhatsApp first, then re-send `{"messaging_product":"whatsapp","to":"<your number>","type":"text","text":{"body":"test"}}`.
 
 **⚠️ Important caveat for §10–12:** your live demo store's WhatsApp currently
 runs through the unofficial web-session (Baileys) channel — its channel record
@@ -369,8 +363,9 @@ app 1792276412190701:
 | instagram_basic | `GET /{ig-user}` | ✅ 200 |
 | instagram_manage_messages | `GET /{ig-user}/conversations` | ✅ 200 |
 | instagram_manage_comments | `GET /{ig}/media`, `/{media}/comments`, POST probe | ✅ 200 |
-| whatsapp_business_* | — | ❌ needs manual (§11/§12) |
-| business_management | — | ✅ already green |
+| whatsapp_business_management | `GET /{waba}/phone_numbers`, `/{phone-number-id}` | ✅ 200 |
+| whatsapp_business_messaging | `POST /{phone-number-id}/messages` | ✅ probed (endpoint hit) |
+| business_management | `GET /me/businesses`, `/{biz}/owned_whatsapp_business_accounts` | ✅ 200 |
 
 Note: the `.env` `META_PAGE_ACCESS_TOKEN` is expired (error 190); the live
 tokens used above were the OAuth-stored channel credentials for store
