@@ -24,6 +24,7 @@ import { Conversation, ChatMessage, Product } from '../types';
 import { sendConversationMessage, approveDraftMessage, createOrderFromConversation, updateConversationCart, updateConversationComplaint, updateConversationArchived, updateConversationSpam, listOrders, updateOrderStatus, ApiOrder } from '../lib/api';
 import DashboardHeader from './DashboardHeader';
 import { formatPrice, getCatalogCurrency, getOrderCurrency, getProductCurrency } from '../../shared/currency';
+import { isActiveOrderLabel } from '../../shared/orderStatus';
 
 // Text the server stores for a customer message that is only a photo.
 const isPhotoPlaceholder = (text: string) => text.trim() === 'Customer sent an image.';
@@ -240,7 +241,7 @@ export default function InboxConsole({
       .then((orders) => {
         const conversationOrders = orders.filter((o) => o.conversationId === activeChat.id);
         const active = conversationOrders.filter(
-          (o) => o.status === 'Processing' || o.status === 'On the Way'
+          (o) => isActiveOrderLabel(o.status)
         );
         setOngoingOrders(active);
         setRecentOrders(conversationOrders);
@@ -255,7 +256,7 @@ export default function InboxConsole({
       const updated = await updateOrderStatus(orderId, 'Cancelled');
       setOngoingOrders((prev) =>
         prev.map((o) => (o.id === orderId ? updated : o)).filter(
-          (o) => o.status === 'Processing' || o.status === 'On the Way'
+          (o) => isActiveOrderLabel(o.status)
         )
       );
       setRecentOrders((prev) =>
@@ -314,7 +315,7 @@ export default function InboxConsole({
         .then((orders) => {
           const active = orders.filter(
             (o) =>
-              (o.status === 'Processing' || o.status === 'On the Way') &&
+              isActiveOrderLabel(o.status) &&
               o.conversationId === activeChat.id
           );
           setOngoingOrders(active);
@@ -389,7 +390,7 @@ export default function InboxConsole({
         .then((orders) => {
           const conversationOrders = orders.filter((o) => o.conversationId === activeChat.id);
           const active = conversationOrders.filter(
-            (o) => o.status === 'Processing' || o.status === 'On the Way'
+            (o) => isActiveOrderLabel(o.status)
           );
           setOngoingOrders(active);
           setRecentOrders(conversationOrders);
@@ -1167,7 +1168,7 @@ export default function InboxConsole({
                             #{order.id.slice(-8).toUpperCase()}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            order.status === 'On the Way' ? 'status-info' : 'status-warning'
+                            order.status === 'In transit' || order.status === 'Out for delivery' ? 'status-info' : order.status === 'Delivery failed' ? 'status-danger' : 'status-warning'
                           }`}>
                             {order.status}
                           </span>
@@ -1229,9 +1230,9 @@ export default function InboxConsole({
                       const statusClass =
                         order.status === 'Delivered'
                           ? 'status-success'
-                          : order.status === 'Cancelled'
+                          : order.status === 'Cancelled' || order.status === 'Delivery failed'
                           ? 'status-danger'
-                          : order.status === 'On the Way'
+                          : order.status === 'In transit' || order.status === 'Out for delivery'
                           ? 'status-info'
                           : 'status-warning';
 

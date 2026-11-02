@@ -10,7 +10,6 @@ import {
   logout,
   fetchMe,
   updateProfile,
-  updateStoreProfile,
   uploadAvatar,
   deleteAvatar,
   listProducts,
@@ -47,13 +46,12 @@ import AgentPersona from './components/AgentPersona';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import IntegrationsHub from './components/IntegrationsHub';
 import OrdersPage from './components/OrdersPage';
-import BookingsPage from './components/BookingsPage';
 import SettingsPage from './components/SettingsPage';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSettings from './components/AdminSettings';
 
 // Dashboard pages a logged-in merchant is returned to after a browser refresh.
-const RESTORABLE_TABS: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'bookings', 'analytics', 'integrations', 'settings', 'support'];
+const RESTORABLE_TABS: Tab[] = ['onboarding', 'inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
 
 // ─────────────────────────────────────────────────────────────────────────
 // App is the single root component: it owns navigation, the auth session,
@@ -87,9 +85,9 @@ export default function App() {
   const initialHashRef = useRef(window.location.hash);
 
   const navigateTo = (tab: Tab, replace = false) => {
-    const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'bookings', 'analytics', 'integrations', 'settings', 'support'];
+    const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
     const effectiveTab: Tab =
-      isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(tab)
+      isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(tab) && tab !== 'settings'
         ? 'onboarding'
         : tab;
     setActiveTab(effectiveTab);
@@ -110,9 +108,9 @@ export default function App() {
     }
     const handlePopState = (e: PopStateEvent) => {
       const requested = (e.state?.tab as Tab) || 'landing';
-      const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'bookings', 'analytics', 'integrations', 'settings', 'support'];
+      const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
       const tab: Tab =
-        isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(requested)
+        isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(requested) && requested !== 'settings'
           ? 'onboarding'
           : requested;
       setActiveTab(tab);
@@ -157,15 +155,21 @@ export default function App() {
         syncProfileToLocalStorage(res.merchant);
         // Admin goes to admin dashboard; others return to the page they refreshed on,
         // falling back to inbox (or onboarding if the profile is incomplete).
+        const returnHash = initialHashRef.current;
         if (res.isAdmin) {
           navigateTo('admin', true);
+        } else if (returnHash.startsWith('#integrations?') && sessionStorage.getItem('remlin_setup_return')) {
+          sessionStorage.removeItem('remlin_setup_return');
+          navigateTo('onboarding', true);
+          window.history.replaceState({ tab: 'onboarding' }, '', `#onboarding${returnHash.slice(returnHash.indexOf('?'))}`);
         } else if (!res.profileComplete) {
           navigateTo('onboarding', true);
         } else {
           const initialHash = initialHashRef.current;
-          const hashTab = initialHash.slice(1).split('?')[0] as Tab;
+          const rawHashTab = initialHash.slice(1).split('?')[0];
+          const hashTab = (rawHashTab === 'overview' ? 'onboarding' : rawHashTab) as Tab;
           const restoreTab = RESTORABLE_TABS.includes(hashTab) ? hashTab : null;
-          navigateTo(restoreTab ?? 'inbox', true);
+          navigateTo(restoreTab ?? 'onboarding', true);
           // Keep any query (e.g. "#integrations?shopifyConnected=1") for the page to read
           if (restoreTab && initialHash.includes('?')) {
             window.history.replaceState({ tab: restoreTab }, '', initialHash);
@@ -256,7 +260,7 @@ export default function App() {
     if (auth.isAdmin) {
       navigateTo('admin');
     } else {
-      navigateTo(auth.profileComplete ? 'inbox' : 'onboarding');
+      navigateTo('onboarding');
     }
     setIsSidebarOpen(false);
   };
@@ -269,7 +273,15 @@ export default function App() {
       syncProfileToLocalStorage(response.merchant);
     }
     if (response.store) setStore(response.store);
-    navigateTo('inbox');
+  };
+
+  // Saved from the AI Persona page: update profile state, then reload the persona so the
+  // shared-info preview reflects the new details.
+  const handleBusinessSaved = (response: OnboardingResponse) => {
+    handleOnboardingComplete(response);
+    getPersona()
+      .then((p) => setPersona((prev) => ({ ...prev, shareBusinessInfo: p.shareBusinessInfo })))
+      .catch((err) => console.error('Failed to refresh persona:', err));
   };
 
   const handleUpdateProfile = async (updates: {
@@ -282,16 +294,6 @@ export default function App() {
     const result = await updateProfile(updates);
     setMerchant(result.merchant);
     syncProfileToLocalStorage(result.merchant);
-    if (typeof result.profileComplete === 'boolean') {
-      profileCompleteRef.current = result.profileComplete;
-      setProfileComplete(result.profileComplete);
-      if (!result.profileComplete) navigateTo('onboarding');
-    }
-  };
-
-  const handleUpdateStore = async (updates: Partial<PublicStore>) => {
-    const result = await updateStoreProfile(updates);
-    setStore(result.store);
     if (typeof result.profileComplete === 'boolean') {
       profileCompleteRef.current = result.profileComplete;
       setProfileComplete(result.profileComplete);
@@ -353,8 +355,7 @@ export default function App() {
         autoFinalizeOrdersAlways: p.autoFinalizeOrdersAlways, 
         openingText: p.openingText, 
         openingImageUrl: p.openingImageUrl,
-        shareBusinessInfo: p.shareBusinessInfo,
-        businessInfo: p.businessInfo
+        shareBusinessInfo: p.shareBusinessInfo
       }))
       .catch((err) => console.error('Failed to load persona:', err));
     listConversations().then(setConversations).catch((err) => console.error('Failed to load conversations:', err));
@@ -371,6 +372,14 @@ export default function App() {
     }, 5000);
     return () => clearInterval(interval);
   }, [merchant, profileComplete]);
+
+  // Before the profile is complete the setup guide still needs live channel status.
+  useEffect(() => {
+    if (!merchant || profileComplete || isAdmin) return;
+    refreshChannels();
+    const interval = setInterval(refreshChannels, 5000);
+    return () => clearInterval(interval);
+  }, [merchant, profileComplete, isAdmin]);
 
   // Keep stored conversations visible even when a provider is disconnected or its
   // connection check is temporarily unavailable. Connection state controls whether new
@@ -468,7 +477,6 @@ export default function App() {
       openingText: saved.openingText,
       openingImageUrl: saved.openingImageUrl ?? prev.openingImageUrl,
       shareBusinessInfo: saved.shareBusinessInfo,
-      businessInfo: saved.businessInfo,
     }));
   };
 
@@ -546,6 +554,43 @@ export default function App() {
     );
   };
 
+  const onboardingPage = (
+    <OnboardingPage
+      merchant={merchant}
+      store={store}
+      onProfileSaved={handleOnboardingComplete}
+      persona={persona}
+      onSavePersona={handleSavePersona}
+      catalogPanel={
+        <IntegrationsHub
+          catalogOnly
+          integrations={integrations}
+          onToggleConnection={handleToggleIntegration}
+          onRefreshAll={handleRefreshAllIntegrations}
+          onReloadProducts={reloadProducts}
+          onGoToCatalog={() => handleNavigate('catalog')}
+        />
+      }
+      channelsPanel={
+        <IntegrationsHub
+          channelsOnly
+          integrations={integrations}
+          onToggleConnection={handleToggleIntegration}
+          onRefreshAll={handleRefreshAllIntegrations}
+          onReloadProducts={reloadProducts}
+          onGoToCatalog={() => handleNavigate('catalog')}
+        />
+      }
+      profileComplete={profileComplete}
+      merchantName={merchant?.name}
+      productCount={products.length}
+      connectedPlatforms={connectedPlatforms}
+      hasPersona={!!persona.customInstructions?.trim()}
+      conversationCount={conversations.length}
+      onNavigate={handleNavigate}
+    />
+  );
+
   // Main page rendering logic based on active tab and authentication
   const renderPageContent = () => {
     if (!isAuthenticated) {
@@ -567,14 +612,16 @@ export default function App() {
       }
     }
 
-    // Authenticated but profile incomplete — mandatory onboarding gate.
-    // Render the onboarding page outside the sidebar layout below.
-    if (!profileComplete) {
-      return null; // rendered separately in the layout below
+    // Authenticated but profile incomplete: only Onboarding and Settings are usable
+    // until the business details are filled in.
+    if (!profileComplete && activeTab !== 'settings') {
+      return onboardingPage;
     }
 
     // Authenticated + complete views
     switch (activeTab) {
+      case 'onboarding':
+        return onboardingPage;
       case 'admin':
         return <AdminDashboard />;
       case 'settings':
@@ -593,7 +640,7 @@ export default function App() {
             merchant={merchant}
             store={store}
             onUpdateProfile={handleUpdateProfile}
-            onUpdateStore={handleUpdateStore}
+            onBusinessSaved={handleBusinessSaved}
             onUploadAvatar={handleUploadAvatar}
             onDeleteAvatar={handleDeleteAvatar}
           />
@@ -617,15 +664,14 @@ export default function App() {
         return (
           <AgentPersona
             persona={persona}
+            merchant={merchant}
+            store={store}
+            onBusinessSaved={handleBusinessSaved}
             onSavePersona={handleSavePersona}
-            onUploadOpeningImage={handleUploadOpeningImage}
-            onDeleteOpeningImage={handleDeleteOpeningImage}
           />
         );
       case 'orders':
         return <OrdersPage products={products} />;
-      case 'bookings':
-        return <BookingsPage products={products} />;
       case 'analytics':
         return <AnalyticsDashboard />;
       case 'integrations':
@@ -652,18 +698,6 @@ export default function App() {
       <div className="bg-background min-h-screen w-full flex items-center justify-center">
         <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-white animate-spin" />
       </div>
-    );
-  }
-
-  // Authenticated but profile incomplete: render onboarding without Sidebar chrome
-  if (isAuthenticated && !profileComplete && merchant && store) {
-    return (
-      <OnboardingPage
-        merchant={merchant}
-        store={store}
-        onComplete={handleOnboardingComplete}
-        onLogout={handleLogout}
-      />
     );
   }
 

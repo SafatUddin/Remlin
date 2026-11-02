@@ -80,7 +80,6 @@ import {
   validateCartSkusInStore,
   conversationPatchHasOnlyAllowedKeys,
   validatePersonaInput,
-  validateStoreBusinessInput,
   validatePhone,
   validateMerchantName,
   validateOnboardingInput,
@@ -130,11 +129,11 @@ import { createConversationsRouter } from './server/routes/conversations';
 import { createProfileRouter } from './server/routes/profile';
 import { createAuthRouter } from './server/routes/auth';
 import { createChannelsRouter } from './server/routes/channels';
+import { createCourierRouter } from './server/routes/courier';
 import { createLocalChannelsRouter } from './server/routes/localChannels';
 import { startChannelAdapters } from './server/channels';
 import { createAdminRouter } from './server/routes/admin';
 import { createKnowledgeRouter } from './server/routes/knowledge';
-import { createAppointmentsRouter } from './server/routes/appointments';
 import {
   getPageAccessTokenForStore,
   getWhatsAppCredentialsForStore,
@@ -199,9 +198,9 @@ async function startServer() {
   app.use(createAuthRouter());
   app.use(createLocalChannelsRouter());
   app.use(createChannelsRouter());
+  app.use(createCourierRouter());
   app.use(createAdminRouter());
   app.use(createKnowledgeRouter());
-  app.use(createAppointmentsRouter());
 
   // Health check
   app.get('/api/health', (req, res) => {

@@ -7,7 +7,6 @@ export type Tab =
   | 'catalog'
   | 'persona'
   | 'orders'
-  | 'bookings'
   | 'analytics'
   | 'integrations'
   | 'settings'
@@ -81,14 +80,6 @@ export interface AIPersona {
   openingText?: string;
   openingImageUrl?: string;
   shareBusinessInfo: boolean;
-  businessInfo: {
-    businessPhone: string | null;
-    businessType: string | null;
-    website: string | null;
-    streetAddress: string | null;
-    city: string | null;
-    country: string | null;
-  };
 }
 
 export interface DailyMetric {

@@ -69,9 +69,18 @@ interface IntegrationsHubProps {
   onRefreshAll: () => Promise<void>;
   onReloadProducts: () => Promise<void>;
   onGoToCatalog: () => void;
+  channelsOnly?: boolean;
+  catalogOnly?: boolean;
 }
 
-export default function IntegrationsHub({ integrations, onToggleConnection, onRefreshAll, onReloadProducts, onGoToCatalog }: IntegrationsHubProps) {
+export default function IntegrationsHub({ integrations, onToggleConnection, onRefreshAll, onReloadProducts, onGoToCatalog, channelsOnly = false, catalogOnly = false }: IntegrationsHubProps) {
+  const embedded = channelsOnly || catalogOnly;
+  const hubHash = embedded ? '#onboarding' : '#integrations';
+  const oauthUrl = async () => {
+    const url = await getFacebookConnectUrl();
+    if (embedded) sessionStorage.setItem('remlin_setup_return', '1');
+    return url;
+  };
   const [searchTerm, setSearchTerm] = useState('');
   // "Products loaded" confirmation shown after a catalog connector / file import finishes
   const [catalogLoaded, setCatalogLoaded] = useState<CatalogLoadedInfo | null>(null);
@@ -262,9 +271,11 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
   const [wooSyncResult, setWooSyncResult] = useState<{ created: number; updated: number; total: number } | null>(null);
 
   const refreshChannelsStatus = () => {
-    getCatalogSource()
-      .then((result) => setCatalogSourceState(result.catalogSource))
-      .catch((err) => console.error('Failed to load catalog source:', err));
+    if (!channelsOnly) {
+      getCatalogSource()
+        .then((result) => setCatalogSourceState(result.catalogSource))
+        .catch((err) => console.error('Failed to load catalog source:', err));
+    }
     listChannels()
       .then((channels) => {
         const facebook = channels.find((c) => c.type === 'facebook');
@@ -315,11 +326,11 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       refreshChannelsStatus();
       setActiveWizardId('int-shopify');
       setWizardStep(2);
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
       handleShopifySync();
     } else if (params.get('waConnected') || params.get('fbConnected')) {
       refreshChannelsStatus();
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
     } else if (params.get('shopifyError')) {
       const code = params.get('shopifyError');
       setShopifyError(
@@ -332,21 +343,21 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               : 'Failed to connect. Please try again.'
       );
       setActiveWizardId('int-shopify');
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
     } else if (params.get('waPending')) {
       const code = params.get('waPending')!;
       setWaPendingToken(code);
       getWhatsAppPendingNumbers(code)
         .then((res) => setWaPendingNumbers(res.numbers))
         .catch(() => setWaError('That connection attempt expired. Please try connecting again.'));
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
     } else if (params.get('fbPending')) {
       const code = params.get('fbPending')!;
       setFbPendingToken(code);
       getFacebookPendingPages(code)
         .then((res) => setFbPendingPages(res.pages))
         .catch(() => setFbError('That connection attempt expired. Please try connecting again.'));
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
     } else if (params.get('fbError')) {
       const code = params.get('fbError');
       setFbError(
@@ -358,7 +369,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               ? 'That channel is already connected to another account.'
               : 'Failed to connect. Please try again.'
       );
-      window.history.replaceState(null, '', '#integrations');
+      window.history.replaceState(null, '', hubHash);
     }
   }, []);
 
@@ -375,7 +386,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       return;
     }
     try {
-      window.location.href = await getFacebookConnectUrl();
+      window.location.href = await oauthUrl();
     } catch {
       setFbError('Failed to start Facebook connection. Please try again.');
     }
@@ -604,7 +615,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       return;
     }
     try {
-      window.location.href = await getFacebookConnectUrl();
+      window.location.href = await oauthUrl();
     } catch {
       setFbError('Failed to start Facebook connection. Please try again.');
     }
@@ -612,7 +623,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
 
   const startFacebookOAuth = async () => {
     try {
-      window.location.href = await getFacebookConnectUrl();
+      window.location.href = await oauthUrl();
     } catch {
       setFbError('Failed to start Facebook connection. Please try again.');
     }
@@ -627,6 +638,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
     const domain = shopifyDomain.trim();
     if (!domain) return;
     try {
+      if (embedded) sessionStorage.setItem('remlin_setup_return', '1');
       window.location.href = await getShopifyConnectUrl(domain);
     } catch {
       setShopifyError('Failed to start Shopify connection. Please try again.');
@@ -746,7 +758,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
       return {
         ...item,
         connected: waConnected,
-        statusText: waConnected ? (waPhoneName ? `Connected: ${waPhoneName}` : 'Active sync') : 'Token expired',
+        statusText: waConnected ? (waPhoneName ? `Connected: ${waPhoneName}` : 'Active sync') : 'Not connected',
       };
     }
     if (item.id === 'int-shopify') {
@@ -779,14 +791,16 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
   );
 
   return (
-    <div className="w-full flex-grow flex flex-col text-left">
-      <DashboardHeader 
-        searchPlaceholder="Search extensions…" 
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-      />
+    <div className={`w-full flex-grow flex flex-col text-left ${embedded ? 'min-h-0' : ''}`}>
+      {!embedded && (
+        <DashboardHeader 
+          searchPlaceholder="Search extensions…" 
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
+      )}
 
-      <div className="w-full flex-grow space-y-6 p-6 md:p-8">
+      <div className={`w-full flex-grow ${embedded ? 'flex flex-col gap-6' : 'space-y-6 p-6 md:p-8'}`}>
         {fbError && (
           <div className="status-danger text-xs p-3.5 rounded-xl flex items-center justify-between font-sans">
             <span>{fbError}</span>
@@ -797,7 +811,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
         )}
 
       {/* Connectivity Banner Content (§8) */}
-      <div className="space-y-3">
+      {!embedded && <div className="space-y-3">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/[0.05] border border-white/12 rounded-full text-[11px] font-bold text-white/70 font-sans tracking-[0.10em]">
           <Globe className="h-4 w-4 text-[#7aa8ff]" />
           Channel ecosystem
@@ -810,32 +824,32 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
         <p className="text-sm text-white/60 max-w-2xl leading-relaxed font-sans">
           Connect your social messaging pages and store platforms directly into Remlin. Automate replies, sync product catalogs, and finalize orders from a single interface.
         </p>
-      </div>
+      </div>}
 
       {/* Messaging Channels Section */}
-      <div className="space-y-4">
+      {!catalogOnly && <div className={channelsOnly ? 'flex-1 flex flex-col gap-6' : 'space-y-4'}>
         <div className="px-1">
-          <h3 className="text-sm font-bold text-white uppercase tracking-[0.12em]">Connect your customer channels</h3>
-          <p className="text-xs text-white/50 mt-1">Connect Facebook, Instagram, WhatsApp or add a website widget</p>
+          <h3 className={`${channelsOnly ? 'text-base' : 'text-sm'} font-bold text-white uppercase tracking-[0.12em]`}>Connect your customer channels</h3>
+          <p className={`${channelsOnly ? 'text-sm' : 'text-xs'} text-white/50 mt-1`}>{channelsOnly ? 'Connect Facebook, Instagram or WhatsApp' : 'Connect Facebook, Instagram, WhatsApp or add a website widget'}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${channelsOnly ? 'gap-8' : 'gap-6'} ${channelsOnly ? 'flex-1 auto-rows-fr' : ''}`}>
           {filteredIntegrations
-            .filter((item) => ['int-fb', 'int-ig', 'int-wa', 'int-widget'].includes(item.id))
+            .filter((item) => (channelsOnly ? ['int-fb', 'int-ig', 'int-wa'] : ['int-fb', 'int-ig', 'int-wa', 'int-widget']).includes(item.id))
             .map((item) => {
               const isWhatsApp = item.id === 'int-wa';
               const isNotConnected = !item.connected;
-              const isWhatsAppError = isWhatsApp && !waConnected;
+              const isWhatsAppError = false;
               
               return (
                 <div 
                   key={item.id}
-                  className={`flex flex-col justify-between h-[260px] p-6 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+                  className={`flex flex-col justify-between ${channelsOnly ? 'min-h-[300px] gap-8 p-9' : 'h-[260px] p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
                     isWhatsAppError 
-                      ? 'status-danger border-red-500/30' 
+                      ? 'status-danger !border-0 shadow-[0_14px_36px_rgba(0,0,0,0.55)]' 
                       : isNotConnected 
-                        ? 'zone-b-grey2 border border-dashed border-white/16 hover:border-white/30' 
-                        : 'zone-b-grey2 hover:border-white/24'
+                        ? 'zone-b-grey2' 
+                        : 'zone-b-grey2'
                   }`}
                 >
                   <div>
@@ -869,17 +883,17 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                       </div>
                     </div>
 
-                    <h3 className="font-sans font-bold text-[19px] text-white tracking-tight mt-5">
+                    <h3 className={`font-sans font-bold text-white tracking-tight ${channelsOnly ? 'mt-7' : 'mt-5'} ${channelsOnly ? 'text-[26px]' : 'text-[19px]'}`}>
                       {item.name}
                     </h3>
                     
-                    <p className="text-white/60 text-xs leading-relaxed mt-1 font-sans line-clamp-3">
+                    <p className={`text-white/60 leading-relaxed ${channelsOnly ? 'mt-3' : 'mt-2'} font-sans line-clamp-3 ${channelsOnly ? 'text-[15px]' : 'text-xs'}`}>
                       {item.description}
                     </p>
                   </div>
 
-                  <div className="border-t border-white/[0.07] pt-4 flex justify-between items-center">
-                    <span className="font-sans text-xs text-white/50">
+                  <div className={`border-t border-white/[0.07] ${channelsOnly ? 'pt-6' : 'pt-4'} flex justify-between items-center gap-3`}>
+                    <span className={`font-sans text-white/50 min-w-0 truncate ${channelsOnly ? 'text-sm' : 'text-xs'}`} title={item.statusText}>
                       {item.statusText}
                     </span>
 
@@ -905,7 +919,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                           handleConnectClick(item);
                         }
                       }}
-                      className={`font-sans text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                      className={`font-sans font-bold rounded-xl transition-all cursor-pointer shrink-0 ${channelsOnly ? 'text-sm px-6 py-3' : 'text-xs px-4 py-2'} ${
                         isWhatsAppError
                           ? 'btn-light-primary'
                           : item.connected
@@ -928,17 +942,18 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               );
             })}
         </div>
-      </div>
+      </div>}
 
+      {!channelsOnly && <>
       {/* Dotted separator with Beta label */}
-      <div className="flex items-center gap-3 py-4">
+      {!catalogOnly && <div className="flex items-center gap-3 py-4">
         <div className="flex-1 border-t border-dotted border-white/25" />
         <span className="text-[9px] uppercase tracking-[0.14em] text-white/40 font-bold">Beta · Product Catalog Connectors</span>
         <div className="flex-1 border-t border-dotted border-white/25" />
-      </div>
+      </div>}
 
       {/* Minimal Single-Line Catalog Source Selector */}
-      <div className="zone-b-grey2 p-4 rounded-xl border border-white/10">
+      <div className="zone-b-grey2 p-5 rounded-xl">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-white/50" />
@@ -952,7 +967,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                 catalogSource === 'CUSTOM'
                   ? 'bg-[#4d8bff]/20 border border-[#4d8bff]/50 text-white'
-                  : 'bg-white/5 border border-white/15 text-white/50 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                  : 'bg-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.35)] text-white/50 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
               }`}
             >
               Custom
@@ -964,7 +979,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                 catalogSource === 'SHOPIFY'
                   ? 'bg-[#96bf48]/20 border border-[#96bf48]/50 text-white'
-                  : 'bg-white/5 border border-white/15 text-white/50 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                  : 'bg-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.35)] text-white/50 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
               }`}
             >
               Shopify
@@ -976,7 +991,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                 catalogSource === 'WOOCOMMERCE'
                   ? 'bg-[#7F54B3]/20 border border-[#7F54B3]/50 text-white'
-                  : 'bg-white/5 border border-white/15 text-white/50 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                  : 'bg-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.35)] text-white/50 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
               }`}
             >
               WooCommerce
@@ -988,7 +1003,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                 catalogSource === 'CSV'
                   ? 'bg-blue-500/20 border border-blue-500/50 text-white'
-                  : 'bg-white/5 border border-white/15 text-white/50 hover:border-white/30 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                  : 'bg-white/5 shadow-[0_4px_12px_rgba(0,0,0,0.35)] text-white/50 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed'
               }`}
             >
               CSV
@@ -1020,12 +1035,12 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               return (
                 <div 
                   key={item.id}
-                  className={`flex flex-col justify-between h-[260px] p-6 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+                  className={`flex flex-col justify-between ${catalogOnly ? 'min-h-[260px] p-8' : 'h-[260px] p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
                     sourceLocked
-                      ? 'zone-b-grey2 border border-white/10 opacity-45'
+                      ? 'zone-b-grey2 opacity-45'
                       : shopifyConnected
-                        ? 'zone-b-grey2 hover:border-white/24'
-                        : 'zone-b-grey2 border border-dashed border-white/16 hover:border-white/30'
+                        ? 'zone-b-grey2'
+                        : 'zone-b-grey2'
                   }`}
                 >
                   <div>
@@ -1092,12 +1107,12 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               return (
                 <div 
                   key={item.id}
-                  className={`flex flex-col justify-between h-[260px] p-6 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+                  className={`flex flex-col justify-between ${catalogOnly ? 'min-h-[260px] p-8' : 'h-[260px] p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
                     sourceLocked
-                      ? 'zone-b-grey2 border border-white/10 opacity-45'
+                      ? 'zone-b-grey2 opacity-45'
                       : wooConnected
-                        ? 'zone-b-grey2 hover:border-white/24'
-                        : 'zone-b-grey2 border border-dashed border-white/16 hover:border-white/30'
+                        ? 'zone-b-grey2'
+                        : 'zone-b-grey2'
                   }`}
                 >
                   <div>
@@ -1160,10 +1175,10 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
             const csvLocked = catalogSource !== 'CUSTOM' && catalogSource !== 'CSV';
             
             return (
-              <div className={`flex flex-col justify-between h-[260px] p-6 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+              <div className={`flex flex-col justify-between ${catalogOnly ? 'min-h-[260px] p-8' : 'h-[260px] p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
                 csvLocked
-                  ? 'zone-b-grey2 border border-white/10 opacity-45'
-                  : 'zone-b-grey2 border border-dashed border-white/20 hover:border-white/35'
+                  ? 'zone-b-grey2 opacity-45'
+                  : 'zone-b-grey2'
               }`}>
                 <div>
                   <div className="flex justify-between items-start">
@@ -1222,6 +1237,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
           })()}
         </div>
       </div>
+      </>}
 
       {/* SETUP WIZARDS DIALOGS OVERLAY */}
       <AnimatePresence>

@@ -55,25 +55,11 @@ export function toPublicMerchant(merchant: {
   };
 }
 
-export function toPublicStore(store: {
-  id: string;
-  name: string;
-  businessPhone?: string | null;
-  businessType?: string | null;
-  website?: string | null;
-  streetAddress?: string | null;
-  city?: string | null;
-  country?: string | null;
-}) {
+export function toPublicStore(store: { id: string; name: string; businessProfile?: unknown }) {
   return {
     id: store.id,
     name: store.name,
-    businessPhone: store.businessPhone ?? null,
-    businessType: store.businessType ?? null,
-    website: store.website ?? null,
-    streetAddress: store.streetAddress ?? null,
-    city: store.city ?? null,
-    country: store.country ?? null,
+    businessProfile: store.businessProfile ?? null,
   };
 }
 

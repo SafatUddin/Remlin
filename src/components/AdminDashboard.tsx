@@ -9,12 +9,9 @@ interface MerchantAnalytics {
   merchantPhone: string | null;
   merchantAvatarUrl: string | null;
   storeName: string;
-  storeBusinessPhone: string | null;
-  storeBusinessType: string | null;
-  storeWebsite: string | null;
-  storeStreetAddress: string | null;
-  storeCity: string | null;
-  storeCountry: string | null;
+  storeHotline: string | null;
+  storeSells: string | null;
+  storeAddress: string | null;
   totalConversations: number;
   convertedConversations: number;
   totalSales: number;
@@ -410,54 +407,23 @@ export default function AdminDashboard() {
                       <p className="text-[14px] text-white font-medium">{selectedMerchant.storeName}</p>
                     </div>
                   </div>
-                  {selectedMerchant.storeBusinessPhone && (
+                  {selectedMerchant.storeHotline && (
                     <div className="flex items-start gap-3">
                       <Phone className="h-4 w-4 text-white/40 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-[11px] text-white/40 uppercase tracking-wider mb-1">Business Phone</p>
-                        <p className="text-[14px] text-white font-medium">{selectedMerchant.storeBusinessPhone}</p>
+                        <p className="text-[11px] text-white/40 uppercase tracking-wider mb-1">Hotline</p>
+                        <p className="text-[14px] text-white font-medium">{selectedMerchant.storeHotline}</p>
                       </div>
                     </div>
                   )}
-                  {selectedMerchant.storeWebsite && (
-                    <div className="flex items-start gap-3">
-                      <Globe className="h-4 w-4 text-white/40 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-[11px] text-white/40 uppercase tracking-wider mb-1">Website</p>
-                        <a
-                          href={selectedMerchant.storeWebsite}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[14px] text-[#00a8e8] hover:text-[#00d2ff] font-medium transition-colors"
-                        >
-                          {selectedMerchant.storeWebsite}
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                  {(selectedMerchant.storeBusinessType ||
-                    selectedMerchant.storeStreetAddress ||
-                    selectedMerchant.storeCity ||
-                    selectedMerchant.storeCountry) && (
+                  {(selectedMerchant.storeSells || selectedMerchant.storeAddress) && (
                     <div className="flex items-start gap-3">
                       <MapPin className="h-4 w-4 text-white/40 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-[11px] text-white/40 uppercase tracking-wider mb-1">Business Details</p>
                         <p className="text-[14px] text-white font-medium leading-relaxed">
-                          {selectedMerchant.storeBusinessType && (
-                            <>
-                              {selectedMerchant.storeBusinessType}
-                              <br />
-                            </>
-                          )}
-                          {selectedMerchant.storeStreetAddress && (
-                            <>
-                              {selectedMerchant.storeStreetAddress}
-                              <br />
-                            </>
-                          )}
-                          {selectedMerchant.storeCity && `${selectedMerchant.storeCity}, `}
-                          {selectedMerchant.storeCountry}
+                          {selectedMerchant.storeSells && (<>{selectedMerchant.storeSells}<br /></>)}
+                          {selectedMerchant.storeAddress}
                         </p>
                       </div>
                     </div>

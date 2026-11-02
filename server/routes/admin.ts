@@ -1,4 +1,5 @@
 import express from 'express';
+import { businessContact } from '../businessProfile';
 import { prisma } from '../db';
 import { requireAuth, AuthedRequest } from '../auth';
 
@@ -112,12 +113,9 @@ export function createAdminRouter(): express.Router {
             merchantPhone: merchant.phone,
             merchantAvatarUrl: merchant.avatarUrl,
             storeName: merchant.store!.name,
-            storeBusinessPhone: merchant.store!.businessPhone,
-            storeBusinessType: merchant.store!.businessType,
-            storeWebsite: merchant.store!.website,
-            storeStreetAddress: merchant.store!.streetAddress,
-            storeCity: merchant.store!.city,
-            storeCountry: merchant.store!.country,
+            storeHotline: businessContact(merchant.store!.businessProfile).businessPhone ?? null,
+            storeSells: businessContact(merchant.store!.businessProfile).businessType ?? null,
+            storeAddress: businessContact(merchant.store!.businessProfile).streetAddress ?? null,
             totalConversations,
             convertedConversations,
             totalSales,

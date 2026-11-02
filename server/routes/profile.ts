@@ -7,7 +7,6 @@ import { toPublicMerchant, toPublicStore } from '../publicViews';
 import {
   validatePhone,
   validateMerchantName,
-  validateStoreBusinessInput,
   validateOnboardingInput,
 } from '../inputValidation';
 import {
@@ -134,7 +133,7 @@ export function createProfileRouter(): express.Router {
 
       const store = await prisma.store.findUnique({
         where: { merchantId: updated.id },
-        select: { name: true, businessPhone: true, businessType: true, streetAddress: true, city: true, country: true },
+        select: { name: true, businessProfile: true },
       });
       const { profileComplete, missingFields } = store
         ? getProfileCompletionStatus(updated, store, req.auth!.isAdmin)
@@ -207,53 +206,13 @@ export function createProfileRouter(): express.Router {
     }
   });
 
-  // Update business / store information
-  router.patch('/api/me/store', requireAuth, async (req: AuthedRequest, res) => {
-    try {
-      const merchantId = req.auth!.merchantId;
-      const store = await prisma.store.findUnique({ where: { merchantId } });
-      if (!store) return res.status(404).json({ error: 'Store not found' });
-
-      const validated = validateStoreBusinessInput(req.body, { allowHttp: !isProduction });
-      if (validated === null) {
-        return res.status(400).json({ error: 'Invalid store information.' });
-      }
-
-      // Normalize empty strings to null for optional fields
-      const data: Record<string, string | null> = {};
-      for (const [key, val] of Object.entries(validated)) {
-        if (val !== undefined) {
-          data[key] = val === '' ? null : val;
-        }
-      }
-
-      const updated = await prisma.store.update({
-        where: { merchantId },
-        data,
-      });
-
-      const merchant = await prisma.merchant.findUnique({
-        where: { id: merchantId },
-        select: { name: true, email: true, phone: true },
-      });
-      const { profileComplete, missingFields } = merchant
-        ? getProfileCompletionStatus(merchant, updated, req.auth!.isAdmin)
-        : { profileComplete: false, missingFields: ['merchant'] };
-
-      res.json({ store: toPublicStore(updated), profileComplete, missingFields });
-    } catch (err: any) {
-      console.error('Update store error');
-      res.status(500).json({ error: 'Failed to update business information' });
-    }
-  });
-
   // Complete onboarding: atomic update of both merchant and store required fields.
   // Accessible even when profile is incomplete (onboarding allowlist).
   router.post('/api/me/complete-profile', requireAuth, async (req: AuthedRequest, res) => {
     try {
       const merchantId = req.auth!.merchantId;
 
-      const result = validateOnboardingInput(req.body, { allowHttp: !isProduction });
+      const result = validateOnboardingInput(req.body);
       if ('fieldErrors' in result) {
         return res.status(400).json({ error: 'Validation failed.', fieldErrors: result.fieldErrors });
       }
@@ -263,19 +222,11 @@ export function createProfileRouter(): express.Router {
       const [updatedMerchant, updatedStore] = await prisma.$transaction([
         prisma.merchant.update({
           where: { id: merchantId },
-          data: { name: mData.name, phone: mData.phone },
+          data: { name: mData.name },
         }),
         prisma.store.update({
           where: { merchantId },
-          data: {
-            name: sData.name,
-            businessPhone: sData.businessPhone,
-            businessType: sData.businessType,
-            streetAddress: sData.streetAddress,
-            city: sData.city,
-            country: sData.country,
-            website: sData.website || null,
-          },
+          data: { name: sData.name, businessProfile: sData.businessProfile as any },
         }),
       ]);
 

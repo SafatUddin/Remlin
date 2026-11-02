@@ -33,6 +33,7 @@ import {
   generateAndStoreAgentReply,
 } from '../conversationEngine';
 import { deliverChannelMessage } from '../channels/outbound';
+import { withBusinessProfile, businessContact } from '../businessProfile';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -415,15 +416,8 @@ export function createConversationsRouter(): express.Router {
         storeName: store.name,
         tone: store.tone,
         style: store.style,
-        customInstructions: store.customInstructions,
-        merchantBusinessInfo: {
-          businessPhone: store.businessPhone || undefined,
-          businessType: store.businessType || undefined,
-          website: store.website || undefined,
-          streetAddress: store.streetAddress || undefined,
-          city: store.city || undefined,
-          country: store.country || undefined,
-        },
+        customInstructions: withBusinessProfile(store.customInstructions, (store as any).businessProfile, store.shareBusinessInfo),
+        merchantBusinessInfo: businessContact((store as any).businessProfile),
         shareBusinessInfo: store.shareBusinessInfo,
       };
       const catalog = products.map((p) => ({

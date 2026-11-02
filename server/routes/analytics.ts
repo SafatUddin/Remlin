@@ -1,4 +1,5 @@
 import express from 'express';
+import { ORDER_STATUS_LABEL, type OrderStatusEnum } from '../../shared/orderStatus';
 import { prisma } from '../db';
 import { requireAuth, AuthedRequest } from '../auth';
 import { requireProfileComplete } from '../profileCompletion';
@@ -20,8 +21,8 @@ export function createAnalyticsRouter(): express.Router {
       const storeId = req.auth!.storeId;
 
       // Accept the ranges shown in the analytics workspace; invalid values default to 30.
-      const rawRange = Number(req.query.range);
-      const range: 7 | 14 | 30 | 90 = rawRange === 7 || rawRange === 14 || rawRange === 90 ? rawRange : 30;
+      const rawRange = Math.floor(Number(req.query.range));
+      const range = Number.isFinite(rawRange) && rawRange >= 1 && rawRange <= 365 ? rawRange : 30;
 
       // Inclusive start boundary: midnight `range` days ago in UTC.
       const start = new Date();
@@ -222,6 +223,9 @@ export function createAnalyticsRouter(): express.Router {
       let aiReplyCount = 0;
       let humanReplyCount = 0;
       let slaBreaches = 0;
+      const hourly = new Array(24).fill(0);
+      let aiAloneConversations = 0;
+      let humanSteppedIn = 0;
       {
         let i = 0;
         while (i < responseTimeMessages.length) {
@@ -232,6 +236,7 @@ export function createAnalyticsRouter(): express.Router {
 
           for (const message of thread) {
             if (message.sender === 'CUSTOMER') {
+              hourly[(message.createdAt.getUTCHours() + 6) % 24] += 1; // Asia/Dhaka (UTC+6)
               customerMessageCount += 1;
               customerConversationIds.add(conversationId);
             } else if (!message.pending && message.sender === 'AI') {
@@ -240,6 +245,11 @@ export function createAnalyticsRouter(): express.Router {
               humanReplyCount += 1;
             }
           }
+
+          const hasHuman = thread.some(m => m.sender === 'MERCHANT' && !m.pending);
+          const hasAi = thread.some(m => m.sender === 'AI' && !m.pending);
+          if (hasHuman) humanSteppedIn += 1;
+          else if (hasAi) aiAloneConversations += 1;
 
           const firstCustomerMsg = thread.find(m => m.sender === 'CUSTOMER');
           if (firstCustomerMsg) {
@@ -264,6 +274,13 @@ export function createAnalyticsRouter(): express.Router {
           i = j;
         }
       }
+      const medianSeconds = (arr: number[]) => {
+        if (!arr.length) return null;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const ms = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        return Math.round(ms / 1000);
+      };
       const averageResponseTimeSeconds = responseTimesMs.length > 0
         ? Math.round((responseTimesMs.reduce((sum, ms) => sum + ms, 0) / responseTimesMs.length) / 1000)
         : null;
@@ -349,8 +366,7 @@ export function createAnalyticsRouter(): express.Router {
 
       // Map order status enum back to the display value already used across
       // the project (same logic as toPublicOrder above).
-      const orderStatusLabel = (s: string) =>
-        s === 'DELIVERED' ? 'Delivered' : s === 'CANCELLED' ? 'Cancelled' : s === 'ON_THE_WAY' ? 'On the Way' : 'Processing';
+      const orderStatusLabel = (s: string) => ORDER_STATUS_LABEL[s as OrderStatusEnum] || 'Processing';
 
       const storeCurrency = getCatalogCurrency(
         await prisma.product.findMany({ where: { storeId }, select: { rawAttributes: true } })
@@ -422,7 +438,12 @@ export function createAnalyticsRouter(): express.Router {
           waitingConversations,
           slaBreachRate: responseTimesMs.length > 0 ? Math.round((slaBreaches / responseTimesMs.length) * 100) : 0,
           averageHandlingTimeSeconds: null,
+          medianAiResponseSeconds: medianSeconds(aiResponseTimesMs),
+          medianHumanResponseSeconds: medianSeconds(humanResponseTimesMs),
+          aiAloneConversations,
+          humanSteppedIn,
         },
+        hourly,
         aiHealth,
         currentSplit,
         handoffs: {

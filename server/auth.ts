@@ -158,6 +158,7 @@ function normalizeOrigin(origin: string): string {
 /** Paths that must not require browser Origin/Referer (provider webhooks & OAuth redirects). */
 const CSRF_EXEMPT_PREFIXES = [
   '/webhooks/',
+  '/api/courier/webhook/',
   '/api/auth/google/callback',
   '/api/auth/google/connect',
   '/api/channels/facebook/callback',

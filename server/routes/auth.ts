@@ -28,7 +28,7 @@ export function createAuthRouter(): express.Router {
   function sendAuthSuccess(
     res: express.Response,
     merchant: { id: string; name: string; email: string; phone?: string | null; avatarUrl: string | null; tokenVersion: number },
-    store: { id: string; name: string; businessPhone?: string | null; businessType?: string | null; website?: string | null; streetAddress?: string | null; city?: string | null; country?: string | null },
+    store: { id: string; name: string; businessProfile?: unknown },
     isAdmin?: boolean,
   ) {
     const { profileComplete, missingFields } = getProfileCompletionStatus(merchant, store, isAdmin);
@@ -113,11 +113,7 @@ export function createAuthRouter(): express.Router {
               data: { 
                 merchantId: merchant.id, 
                 name: 'Admin Dashboard',
-                businessPhone: 'N/A', // Set dummy data to avoid profile incomplete
-                businessType: 'Admin',
-                streetAddress: 'N/A',
-                city: 'N/A',
-                country: 'N/A',
+                businessProfile: { sell: 'Admin', hotline: 'N/A', address: 'N/A' },
               },
             });
             merchant = { ...merchant, store };

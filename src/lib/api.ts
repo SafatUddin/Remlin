@@ -24,12 +24,7 @@ export interface PublicMerchant {
 export interface PublicStore {
   id: string;
   name: string;
-  businessPhone: string | null;
-  businessType: string | null;
-  website: string | null;
-  streetAddress: string | null;
-  city: string | null;
-  country: string | null;
+  businessProfile?: Record<string, any> | null;
 }
 
 export interface ProfileStatus {
@@ -107,28 +102,10 @@ export function updateProfile(input: {
   return request<{ merchant: PublicMerchant } & ProfileStatus>('/api/me', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
-export function updateStoreProfile(input: {
-  name?: string;
-  businessPhone?: string;
-  businessType?: string;
-  website?: string;
-  streetAddress?: string;
-  city?: string;
-  country?: string;
-}) {
-  return request<{ store: PublicStore } & ProfileStatus>('/api/me/store', { method: 'PATCH', body: JSON.stringify(input) });
-}
-
 export function completeProfile(input: {
   name: string;
-  phone: string;
   storeName: string;
-  businessPhone: string;
-  businessType: string;
-  website?: string;
-  streetAddress: string;
-  city: string;
-  country: string;
+  businessProfile: Record<string, any>;
 }) {
   return request<OnboardingResponse>('/api/me/complete-profile', {
     method: 'POST',
@@ -260,14 +237,6 @@ export interface ApiPersona {
   openingText?: string;
   openingImageUrl?: string;
   shareBusinessInfo: boolean;
-  businessInfo: {
-    businessPhone: string | null;
-    businessType: string | null;
-    website: string | null;
-    streetAddress: string | null;
-    city: string | null;
-    country: string | null;
-  };
 }
 
 export function getPersona() {
@@ -537,6 +506,8 @@ export interface ApiOrderItem {
   quantity: number;
 }
 
+import type { OrderStatusLabel } from '../../shared/orderStatus';
+
 export interface ApiOrder {
   id: string;
   conversationId: string | null;
@@ -544,56 +515,19 @@ export interface ApiOrder {
   customerName: string;
   customerPhone: string | null;
   address: string;
-  status: 'Processing' | 'On the Way' | 'Delivered' | 'Cancelled';
+  status: OrderStatusLabel;
   total: number;
   createdAt: string;
+  trackingCode?: string | null;
+  trackingUrl?: string | null;
 }
 
 export function listOrders() {
   return request<ApiOrder[]>('/api/orders');
 }
 
-export function updateOrderStatus(id: string, status: 'Processing' | 'On the Way' | 'Delivered' | 'Cancelled') {
-  return request<ApiOrder>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-}
-
-export interface ApiAppointment {
-  id: string;
-  conversationId: string | null;
-  customerName: string;
-  customerPhone: string | null;
-  service: string;
-  startsAt: string;
-  endsAt: string;
-  status: 'REQUESTED' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
-  advanceAmount: number | null;
-  advancePaymentMethod: string | null;
-  advanceTransactionId: string | null;
-  notes: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export function listAppointments() {
-  return request<{ appointments: ApiAppointment[] }>('/api/appointments');
-}
-
-export function createAppointment(input: {
-  customerName: string;
-  customerPhone?: string;
-  service: string;
-  startsAt: string;
-  endsAt: string;
-  advanceAmount?: number;
-  advancePaymentMethod?: string;
-  advanceTransactionId?: string;
-  notes?: string;
-}) {
-  return request<ApiAppointment>('/api/appointments', { method: 'POST', body: JSON.stringify(input) });
-}
-
-export function updateAppointmentStatus(id: string, status: ApiAppointment['status']) {
-  return request<ApiAppointment>(`/api/appointments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+export function updateOrderStatus(id: string, status: OrderStatusLabel, trackingCode?: string) {
+  return request<ApiOrder>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status, trackingCode }) });
 }
 
 export function createOrderFromConversation(conversationId: string, input: { customerName?: string; customerPhone?: string; address: string }) {
@@ -612,7 +546,7 @@ export interface ApiAnalyticsActivity {
 }
 
 export interface ApiAnalytics {
-  range: 7 | 14 | 30 | 90;
+  range: number;
   series: { date: string; conversations: number; convertedSales: number; customerMessages: number; aiReplies: number; humanReplies: number }[];
   kpis: {
     automationRate: number;
@@ -633,7 +567,12 @@ export interface ApiAnalytics {
     waitingConversations: number;
     slaBreachRate: number;
     averageHandlingTimeSeconds: number | null;
+    medianAiResponseSeconds: number | null;
+    medianHumanResponseSeconds: number | null;
+    aiAloneConversations: number;
+    humanSteppedIn: number;
   };
+  hourly: number[];
   currentSplit: { aiManaged: number; humanActive: number; closed: number };
   handoffs: { requestsToHumans: number; autoReturned: number; totalEvents: number; averageEventsPerDay: number };
   busiestPages: { page: string; conversations: number }[];
@@ -648,6 +587,30 @@ export interface ApiAnalytics {
   recentActivity: ApiAnalyticsActivity[];
 }
 
-export function fetchAnalytics(range: 7 | 14 | 30 | 90 = 30) {
+export function fetchAnalytics(range = 30) {
   return request<ApiAnalytics>(`/api/analytics?range=${range}`);
+}
+
+export interface CourierStatus {
+  provider: 'pathao' | 'steadfast' | null;
+  connected: boolean;
+  skipped: boolean;
+  webhookToken: string | null;
+  webhookUrls: { pathao: string | null; steadfast: string | null };
+}
+
+export function getCourier() {
+  return request<CourierStatus>('/api/courier');
+}
+
+export function saveCourier(provider: 'pathao' | 'steadfast', keys: Record<string, string>) {
+  return request<CourierStatus>('/api/courier', { method: 'PUT', body: JSON.stringify({ provider, keys }) });
+}
+
+export function disconnectCourier() {
+  return request<CourierStatus>('/api/courier', { method: 'DELETE' });
+}
+
+export function skipCourier() {
+  return request<CourierStatus>('/api/courier/skip', { method: 'POST' });
 }

@@ -5,6 +5,8 @@
 
 export const JSON_BODY_LIMIT = '1mb';
 
+import { sanitizeBusinessProfile, type BusinessProfile } from './businessProfile';
+
 export const MAX_PRODUCT_NAME_LENGTH = 200;
 export const MAX_PRODUCT_DESCRIPTION_LENGTH = 5000;
 export const MAX_SKU_LENGTH = 100;
@@ -18,10 +20,6 @@ export const MAX_PERSONA_INSTRUCTIONS_LENGTH = 10_000;
 export const MAX_OPENING_TEXT_LENGTH = 2000;
 export const MAX_KNOWLEDGE_TITLE_LENGTH = 200;
 export const MAX_KNOWLEDGE_BODY_LENGTH = 20_000;
-export const MAX_APPOINTMENT_NAME_LENGTH = 200;
-export const MAX_APPOINTMENT_PHONE_LENGTH = 30;
-export const MAX_APPOINTMENT_SERVICE_LENGTH = 200;
-export const MAX_APPOINTMENT_NOTES_LENGTH = 2000;
 export const MAX_ADVANCE_TRANSACTION_ID_LENGTH = 200;
 
 // Profile / merchant settings limits
@@ -50,18 +48,6 @@ export type ValidatedKnowledgeInput = {
   title: string;
   body: string;
   enabled?: boolean;
-};
-
-export type ValidatedAppointmentInput = {
-  customerName: string;
-  customerPhone?: string;
-  service: string;
-  startsAt: Date;
-  endsAt: Date;
-  advanceAmount?: number;
-  advancePaymentMethod?: string;
-  advanceTransactionId?: string;
-  notes?: string;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -101,50 +87,6 @@ export function validateKnowledgeInput(body: unknown, partial = false): Validate
     result.enabled = body.enabled;
   }
   return result;
-}
-
-export function validateAppointmentInput(body: unknown): ValidatedAppointmentInput | null {
-  if (!isPlainObject(body)) return null;
-  const customerName = nonEmptyString(body.customerName, MAX_APPOINTMENT_NAME_LENGTH);
-  const service = nonEmptyString(body.service, MAX_APPOINTMENT_SERVICE_LENGTH);
-  const startsAt = typeof body.startsAt === 'string' ? new Date(body.startsAt) : null;
-  const endsAt = typeof body.endsAt === 'string' ? new Date(body.endsAt) : null;
-  if (!customerName || !service || !startsAt || !endsAt || !Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) return null;
-  if (startsAt.getTime() <= Date.now() || endsAt.getTime() <= startsAt.getTime() || endsAt.getTime() - startsAt.getTime() > 24 * 60 * 60 * 1000) return null;
-
-  const customerPhone = optionalString(body.customerPhone, MAX_APPOINTMENT_PHONE_LENGTH);
-  const notes = optionalString(body.notes, MAX_APPOINTMENT_NOTES_LENGTH);
-  const advancePaymentMethod = optionalString(body.advancePaymentMethod, 50);
-  const advanceTransactionId = optionalString(body.advanceTransactionId, MAX_ADVANCE_TRANSACTION_ID_LENGTH);
-  if (customerPhone === null || notes === null || advancePaymentMethod === null || advanceTransactionId === null) return null;
-
-  let advanceAmount: number | undefined;
-  if (body.advanceAmount !== undefined && body.advanceAmount !== null && body.advanceAmount !== '') {
-    advanceAmount = typeof body.advanceAmount === 'number' ? body.advanceAmount : Number(body.advanceAmount);
-    if (!Number.isFinite(advanceAmount) || advanceAmount < 0 || advanceAmount > 1_000_000) return null;
-  }
-
-  return {
-    customerName,
-    ...(customerPhone !== undefined ? { customerPhone } : {}),
-    service,
-    startsAt,
-    endsAt,
-    ...(advanceAmount !== undefined ? { advanceAmount } : {}),
-    ...(advancePaymentMethod !== undefined ? { advancePaymentMethod } : {}),
-    ...(advanceTransactionId !== undefined ? { advanceTransactionId } : {}),
-    ...(notes !== undefined ? { notes } : {}),
-  };
-}
-
-export function canTransitionAppointmentStatus(current: string, next: string): boolean {
-  const transitions: Record<string, Set<string>> = {
-    REQUESTED: new Set(['REQUESTED', 'CONFIRMED', 'CANCELLED']),
-    CONFIRMED: new Set(['CONFIRMED', 'COMPLETED', 'CANCELLED']),
-    CANCELLED: new Set(['CANCELLED']),
-    COMPLETED: new Set(['COMPLETED']),
-  };
-  return transitions[current]?.has(next) ?? false;
 }
 
 export function parseValidatedPrice(price: unknown): number | null {
@@ -260,83 +202,6 @@ export function validateMerchantName(value: unknown): string | null {
   return trimmed;
 }
 
-export type ValidatedStoreBusinessInput = {
-  name?: string;
-  businessPhone?: string;
-  businessType?: string;
-  website?: string;
-  streetAddress?: string;
-  city?: string;
-  country?: string;
-};
-
-/** Validate the business-information PATCH body. Returns null on any invalid field. */
-export function validateStoreBusinessInput(
-  body: unknown,
-  options?: { allowHttp?: boolean },
-): ValidatedStoreBusinessInput | null {
-  if (!isPlainObject(body)) return null;
-
-  const allowed = new Set(['name', 'businessPhone', 'businessType', 'website', 'streetAddress', 'city', 'country']);
-  for (const key of Object.keys(body)) {
-    if (!allowed.has(key)) return null; // reject mass-assignment
-  }
-
-  const result: ValidatedStoreBusinessInput = {};
-
-  if (body.name !== undefined) {
-    const name = nonEmptyString(body.name, MAX_STORE_NAME_LENGTH);
-    if (name === null) return null;
-    result.name = name;
-  }
-
-  if (body.businessPhone !== undefined) {
-    const phone = validatePhone(body.businessPhone);
-    if (phone === null) return null;
-    if (phone !== undefined) result.businessPhone = phone;
-  }
-
-  if (body.website !== undefined) {
-    const ws = body.website;
-    if (typeof ws !== 'string') return null;
-    const trimmed = ws.trim();
-    if (trimmed === '') {
-      result.website = '';
-    } else {
-      if (trimmed.length > MAX_WEBSITE_LENGTH) return null;
-      if (DANGEROUS_URL_SCHEMES.test(trimmed)) return null;
-      let parsed: URL;
-      try {
-        parsed = new URL(trimmed);
-      } catch {
-        return null;
-      }
-      if (parsed.protocol !== 'https:' && !(options?.allowHttp && parsed.protocol === 'http:')) return null;
-      result.website = trimmed;
-    }
-  }
-
-  const simpleFields: Array<[string, number]> = [
-    ['businessType', MAX_ADDRESS_FIELD_LENGTH],
-    ['streetAddress', MAX_ADDRESS_FIELD_LENGTH],
-    ['city', MAX_ADDRESS_FIELD_LENGTH],
-    ['country', MAX_COUNTRY_LENGTH],
-  ];
-
-  for (const [field, maxLen] of simpleFields) {
-    const raw = body[field];
-    if (raw !== undefined) {
-      if (typeof raw !== 'string') return null;
-      const trimmed = raw.trim();
-      if (trimmed.length > maxLen) return null;
-      if (hasControlChars(trimmed)) return null;
-      (result as Record<string, string>)[field] = trimmed;
-    }
-  }
-
-  return result;
-}
-
 // ── Onboarding-specific validators ───────────────────────────────────────────
 
 /** Phone is required during onboarding (non-empty). */
@@ -357,117 +222,53 @@ export function validateRequiredPostalCode(value: unknown): string | null {
   return trimmed;
 }
 
+
 export type ValidatedOnboardingInput = {
-  merchant: { name: string; phone: string };
-  store: {
-    name: string;
-    businessPhone: string;
-    businessType: string;
-    streetAddress: string;
-    city: string;
-    country: string;
-    website: string;
-  };
+  merchant: { name: string };
+  store: { name: string; businessProfile: BusinessProfile };
 };
 
 /**
- * Validates the full onboarding completion payload in one pass.
- * Returns field-level errors so the UI can highlight individual fields.
- * The email field is intentionally absent — email comes from the authenticated session.
+ * Validates the "Your business" payload in one pass, returning field-level errors.
+ * Email comes from the authenticated session. Sell / hotline / address live inside businessProfile.
  */
 export function validateOnboardingInput(
   body: unknown,
-  options?: { allowHttp?: boolean },
 ): { data: ValidatedOnboardingInput } | { fieldErrors: Record<string, string> } {
   const fieldErrors: Record<string, string> = {};
 
   if (!isPlainObject(body)) {
     return { fieldErrors: { _form: 'Invalid request body.' } };
   }
-
-  const allowed = new Set([
-    'name', 'phone',
-    'storeName', 'businessPhone', 'businessType', 'website',
-    'streetAddress', 'city', 'country',
-  ]);
   for (const key of Object.keys(body)) {
-    if (!allowed.has(key)) {
+    if (!['name', 'storeName', 'businessProfile'].includes(key)) {
       return { fieldErrors: { _form: 'Unexpected field in request.' } };
     }
   }
 
-  // Merchant fields
   const name = validateMerchantName(body.name);
   if (name === null) fieldErrors.name = 'Full name is required and must be ≤200 characters.';
 
-  const phone = validateRequiredPhone(body.phone);
-  if (phone === null) fieldErrors.phone = 'A valid phone number is required.';
-
-  // Store fields
   const storeName = nonEmptyString(body.storeName, MAX_STORE_NAME_LENGTH);
   if (storeName === null) fieldErrors.storeName = 'Business name is required and must be ≤200 characters.';
 
-  const businessPhone = validateRequiredPhone(body.businessPhone);
-  if (businessPhone === null) fieldErrors.businessPhone = 'A valid business phone number is required.';
-
-  const businessType = nonEmptyString(body.businessType, MAX_ADDRESS_FIELD_LENGTH);
-  if (businessType === null) fieldErrors.businessType = 'Business type is required.';
-
-  const streetAddress = nonEmptyString(body.streetAddress, MAX_ADDRESS_FIELD_LENGTH);
-  if (streetAddress === null) fieldErrors.streetAddress = 'Street address is required.';
-
-  const city = nonEmptyString(body.city, MAX_ADDRESS_FIELD_LENGTH);
-  if (city === null) fieldErrors.city = 'City is required.';
-
-  const country = nonEmptyString(body.country, MAX_COUNTRY_LENGTH);
-  if (country === null) fieldErrors.country = 'Country is required.';
-
-  // Website (optional)
-  let website = '';
-  if (body.website !== undefined && body.website !== null && body.website !== '') {
-    const ws = body.website;
-    if (typeof ws !== 'string') {
-      fieldErrors.website = 'Website must be a valid URL.';
-    } else {
-      const trimmed = ws.trim();
-      if (trimmed !== '') {
-        if (trimmed.length > MAX_WEBSITE_LENGTH || DANGEROUS_URL_SCHEMES.test(trimmed)) {
-          fieldErrors.website = 'Website must be a valid URL.';
-        } else {
-          let parsed: URL;
-          try {
-            parsed = new URL(trimmed);
-            if (parsed.protocol !== 'https:' && !(options?.allowHttp && parsed.protocol === 'http:')) {
-              fieldErrors.website = 'Website must start with https://.';
-            } else {
-              website = trimmed;
-            }
-          } catch {
-            fieldErrors.website = 'Website must be a valid URL.';
-          }
-        }
-      }
+  const profile = sanitizeBusinessProfile(body.businessProfile);
+  if (profile === null) {
+    fieldErrors.businessProfile = 'Business details are invalid.';
+  } else {
+    const hotline = validateRequiredPhone(profile.hotline);
+    if (hotline === null) fieldErrors.hotline = 'A valid hotline number is required.';
+    else profile.hotline = hotline;
+    if (!profile.sell) fieldErrors.sell = 'Tell us what you sell.';
+    if (!profile.address) fieldErrors.address = 'Address is required.';
+    for (const k of ['hours', 'inC', 'inF', 'inS', 'outC', 'outF', 'outS', 'extra', 'pay', 'returns', 'first'] as const) {
+      if (!profile[k]) fieldErrors[k] = 'This field is required.';
     }
+    if (!profile.addr) fieldErrors.addr = 'Choose how to address customers.';
   }
 
-  if (Object.keys(fieldErrors).length > 0) {
-    return { fieldErrors };
-  }
-
-  return {
-    data: {
-      merchant: { name: name!, phone: phone! },
-      store: {
-        name: storeName!,
-        businessPhone: businessPhone!,
-        businessType: businessType!,
-        streetAddress: streetAddress!,
-        city: city!,
-        country: country!,
-        website,
-      },
-    },
-  };
+  if (Object.keys(fieldErrors).length > 0) return { fieldErrors };
+  return { data: { merchant: { name: name! }, store: { name: storeName!, businessProfile: profile! } } };
 }
 
 export type ValidatedPersonaInput = {

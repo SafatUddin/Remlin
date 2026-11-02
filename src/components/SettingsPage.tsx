@@ -14,7 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import DashboardHeader from './DashboardHeader';
-import type { PublicMerchant, PublicStore } from '../lib/api';
+import type { PublicMerchant, PublicStore, OnboardingResponse } from '../lib/api';
+import BusinessProfileForm from './BusinessProfileForm';
 import {
   Feedback,
   SectionCard,
@@ -36,7 +37,7 @@ interface SettingsPageProps {
     currentPassword?: string;
     password?: string;
   }) => Promise<void>;
-  onUpdateStore: (input: Partial<PublicStore>) => Promise<void>;
+  onBusinessSaved: (response: OnboardingResponse) => void;
   onUploadAvatar: (file: File) => Promise<void>;
   onDeleteAvatar: () => Promise<void>;
 }
@@ -344,186 +345,16 @@ function PersonalInfoSection({
 // ── Business information section ──────────────────────────────────────────────
 
 function BusinessInfoSection({
+  merchant,
   store,
-  onUpdateStore,
+  onBusinessSaved,
 }: {
+  merchant: PublicMerchant | null;
   store: PublicStore | null;
-  onUpdateStore: SettingsPageProps['onUpdateStore'];
+  onBusinessSaved: SettingsPageProps['onBusinessSaved'];
 }) {
-  const [storeName, setStoreName] = useState(store?.name || '');
-  const [businessPhone, setBusinessPhone] = useState(store?.businessPhone || '');
-  const [businessType, setBusinessType] = useState(store?.businessType || '');
-  const [website, setWebsite] = useState(store?.website || '');
-  const [streetAddress, setStreetAddress] = useState(store?.streetAddress || '');
-  const [city, setCity] = useState(store?.city || '');
-  const [country, setCountry] = useState(store?.country || '');
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackProps | null>(null);
-
-  useEffect(() => {
-    setStoreName(store?.name || '');
-    setBusinessPhone(store?.businessPhone || '');
-    setBusinessType(store?.businessType || '');
-    setWebsite(store?.website || '');
-    setStreetAddress(store?.streetAddress || '');
-    setCity(store?.city || '');
-    setCountry(store?.country || '');
-  }, [
-    store?.name,
-    store?.businessPhone,
-    store?.businessType,
-    store?.website,
-    store?.streetAddress,
-    store?.city,
-    store?.country,
-  ]);
-
-  const showFeedback = useCallback((fb: FeedbackProps) => {
-    setFeedback(fb);
-    const t = setTimeout(() => setFeedback(null), 3500);
-    return () => clearTimeout(t);
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!storeName.trim()) {
-      showFeedback({ type: 'error', message: 'Business name is required.' });
-      return;
-    }
-    if (website.trim() && !/^https?:\/\/.+/.test(website.trim())) {
-      showFeedback({ type: 'error', message: 'Website must be a valid URL starting with https://.' });
-      return;
-    }
-    setSaving(true);
-    try {
-      await onUpdateStore({
-        name: storeName.trim(),
-        businessPhone: businessPhone.trim(),
-        businessType: businessType.trim(),
-        website: website.trim(),
-        streetAddress: streetAddress.trim(),
-        city: city.trim(),
-        country: country.trim(),
-      });
-      showFeedback({ type: 'success', message: 'Business information saved.' });
-    } catch (err: any) {
-      showFeedback({ type: 'error', message: err?.message || 'Failed to save. Please try again.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <SectionCard
-      title="Business Information"
-      description="Your store's public-facing contact details and address."
-      icon={<Building2 className="w-4 h-4 text-white/50" />}
-    >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Business / Store Name">
-            <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
-              <input
-                type="text"
-                value={storeName}
-                onChange={(e) => setStoreName(e.target.value)}
-                placeholder="Acme Corp"
-                disabled={saving}
-                autoComplete="organization"
-                className="zone-b-input w-full pl-9 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/20 disabled:opacity-50"
-              />
-            </div>
-          </Field>
-          <Field label="Business Phone">
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
-              <input
-                type="tel"
-                value={businessPhone}
-                onChange={(e) => setBusinessPhone(e.target.value)}
-                placeholder="+1 (555) 000-0000"
-                disabled={saving}
-                autoComplete="tel"
-                className="zone-b-input w-full pl-9 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/20 disabled:opacity-50"
-              />
-            </div>
-          </Field>
-        </div>
-
-        <Field label="Website">
-          <div className="relative">
-            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
-            <input
-              type="url"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://yourstore.com"
-              disabled={saving}
-              autoComplete="url"
-              className="zone-b-input w-full pl-9 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/20 disabled:opacity-50"
-            />
-          </div>
-        </Field>
-
-        <Field label="Business Type">
-          <div className="relative">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
-            <input
-              type="text"
-              value={businessType}
-              onChange={(e) => setBusinessType(e.target.value)}
-              placeholder="e.g., Electronics Retailer, Fashion Boutique, etc."
-              disabled={saving}
-              className="zone-b-input w-full pl-9 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/20 disabled:opacity-50"
-            />
-          </div>
-        </Field>
-
-        <Field label="Street Address">
-          <div className="relative">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
-            <input
-              type="text"
-              value={streetAddress}
-              onChange={(e) => setStreetAddress(e.target.value)}
-              placeholder="123 Main Street"
-              disabled={saving}
-              autoComplete="street-address"
-              className="zone-b-input w-full pl-9 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/20 disabled:opacity-50"
-            />
-          </div>
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="City">
-            <Input
-              value={city}
-              onChange={setCity}
-              placeholder="New York"
-              disabled={saving}
-              autoComplete="address-level2"
-            />
-          </Field>
-          <Field label="Country">
-            <Input
-              value={country}
-              onChange={setCountry}
-              placeholder="United States"
-              disabled={saving}
-              autoComplete="country-name"
-            />
-          </Field>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {feedback && <Feedback key="fb" type={feedback.type} message={feedback.message} />}
-        </AnimatePresence>
-
-        <SaveButton loading={saving} />
-      </form>
-    </SectionCard>
-  );
+  if (!merchant || !store) return null;
+  return <BusinessProfileForm merchant={merchant} store={store} onComplete={onBusinessSaved} submitLabel="Save your business" />;
 }
 
 // ── Security section ──────────────────────────────────────────────────────────
@@ -681,7 +512,7 @@ export default function SettingsPage({
   merchant,
   store,
   onUpdateProfile,
-  onUpdateStore,
+  onBusinessSaved,
   onUploadAvatar,
   onDeleteAvatar,
 }: SettingsPageProps) {
@@ -761,7 +592,7 @@ export default function SettingsPage({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
-              <BusinessInfoSection store={store} onUpdateStore={onUpdateStore} />
+              <BusinessInfoSection merchant={merchant} store={store} onBusinessSaved={onBusinessSaved} />
             </motion.div>
           )}
 

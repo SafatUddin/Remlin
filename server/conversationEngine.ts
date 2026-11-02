@@ -9,6 +9,8 @@ import { generateAgentReply, DEFAULT_REPLY_TEXT } from './agent';
 import { resolveProductImageUrl } from '../shared/productImage';
 import { formatPrice, getCatalogCurrency, getProductCurrency } from '../shared/currency';
 import { resolveProductName } from '../shared/catalogColumns';
+import { withBusinessProfile, businessContact } from './businessProfile';
+import { ACTIVE_ORDER_STATUSES, ORDER_STATUS_LABEL, type OrderStatusEnum } from '../shared/orderStatus';
 import {
   sendMessengerMessage,
   sendMessengerImage,
@@ -219,7 +221,7 @@ export async function generateAndStoreAgentReply(
       where: {
         storeId: conversation.storeId,
         conversationId: conversation.id,
-        status: { in: ['PROCESSING', 'ON_THE_WAY'] },
+        status: { in: ACTIVE_ORDER_STATUSES },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -236,16 +238,9 @@ export async function generateAndStoreAgentReply(
     storeName: store.name,
     tone: store.tone,
     style: store.style,
-    customInstructions: store.customInstructions,
+    customInstructions: withBusinessProfile(store.customInstructions, (store as any).businessProfile, store.shareBusinessInfo),
     knowledgeContext: '',
-    merchantBusinessInfo: {
-      businessPhone: store.businessPhone || undefined,
-      businessType: store.businessType || undefined,
-      website: store.website || undefined,
-      streetAddress: store.streetAddress || undefined,
-      city: store.city || undefined,
-      country: store.country || undefined,
-    },
+    merchantBusinessInfo: businessContact((store as any).businessProfile),
     shareBusinessInfo: store.shareBusinessInfo,
   };
   const storeCurrency = getCatalogCurrency(products);
@@ -428,13 +423,13 @@ export async function generateAndStoreAgentReply(
     contactOnFile: storedContact.phone || storedContact.address ? storedContact : undefined,
     pendingCancelOrders: pendingCancelOrders.map((o) => ({
       id: o.id,
-      status: o.status === 'ON_THE_WAY' ? 'On the Way' : 'Processing',
+      status: ORDER_STATUS_LABEL[o.status as OrderStatusEnum] || 'Processing',
       total: Number(o.total),
     })),
     ongoingOrders: conversationOrders.map((o) => ({
       id: o.id,
       items: ((o.items as any[]) || []).map((i) => ({ name: i.name, quantity: i.quantity, price: Number(i.price) })),
-      status: o.status === 'ON_THE_WAY' ? 'On the Way' : 'Processing',
+      status: ORDER_STATUS_LABEL[o.status as OrderStatusEnum] || 'Processing',
       createdAt: o.createdAt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
       total: Number(o.total),
     })),
@@ -669,7 +664,7 @@ export async function generateAndStoreAgentReply(
           for (const order of pendingCancelOrders) {
             // Status predicate guards against double-cancel / cancelling a delivered order.
             const updated = await tx.order.updateMany({
-              where: { id: order.id, storeId: conversation.storeId, conversationId: conversation.id, status: { in: ['PROCESSING', 'ON_THE_WAY'] } },
+              where: { id: order.id, storeId: conversation.storeId, conversationId: conversation.id, status: { in: ACTIVE_ORDER_STATUSES } },
               data: { status: 'CANCELLED' },
             });
             if (updated.count !== 1) continue;
@@ -885,7 +880,7 @@ export async function generateAndStoreAgentReply(
 
 // Pushes a finalized AI reply out to the customer's channel. Channels with no push API
 // (WIDGET) simply don't match any branch.
-async function deliverAgentReply(
+export async function deliverAgentReply(
   conversation: { storeId: string; channelType: string; externalUserId: string | null },
   text: string,
   imageUrl?: string,

@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import { prisma } from './db';
 import type { AuthedRequest } from './auth';
+import { sanitizeBusinessProfile } from './businessProfile';
 
 // ── Profile completion logic ───────────────────────────────────────────────
 
@@ -13,11 +14,7 @@ export interface MerchantForCompletion {
 
 export interface StoreForCompletion {
   name: string;
-  businessPhone?: string | null;
-  businessType?: string | null;
-  streetAddress?: string | null;
-  city?: string | null;
-  country?: string | null;
+  businessProfile?: unknown;
 }
 
 export interface ProfileCompletionStatus {
@@ -48,14 +45,12 @@ export function getProfileCompletionStatus(
 
   if (!nonEmpty(merchant.name)) missing.push('name');
   if (!nonEmpty(merchant.email)) missing.push('email');
-  if (!nonEmpty(merchant.phone)) missing.push('phone');
 
   if (!nonEmpty(store.name)) missing.push('storeName');
-  if (!nonEmpty(store.businessPhone)) missing.push('businessPhone');
-  if (!nonEmpty(store.businessType)) missing.push('businessType');
-  if (!nonEmpty(store.streetAddress)) missing.push('streetAddress');
-  if (!nonEmpty(store.city)) missing.push('city');
-  if (!nonEmpty(store.country)) missing.push('country');
+  const bp = sanitizeBusinessProfile(store.businessProfile) || {};
+  if (!nonEmpty(bp.hotline)) missing.push('hotline');
+  if (!nonEmpty(bp.sell)) missing.push('sell');
+  if (!nonEmpty(bp.address)) missing.push('address');
 
   return { profileComplete: missing.length === 0, missingFields: missing };
 }
@@ -69,11 +64,17 @@ export function getProfileCompletionStatus(
 const ONBOARDING_ALLOWED: Array<{ method: string; path: string }> = [
   { method: 'GET', path: '/api/me' },
   { method: 'PATCH', path: '/api/me' },
-  { method: 'PATCH', path: '/api/me/store' },
   { method: 'POST', path: '/api/me/complete-profile' },
   { method: 'POST', path: '/api/me/avatar' },
   { method: 'DELETE', path: '/api/me/avatar' },
   { method: 'POST', path: '/api/auth/logout' },
+  { method: 'GET', path: '/api/channels' },
+  { method: 'POST', path: '/api/channels/facebook/prepare' },
+  { method: 'GET', path: '/api/channels/facebook/pending' },
+  { method: 'POST', path: '/api/channels/facebook/select' },
+  { method: 'GET', path: '/api/channels/whatsapp/pending' },
+  { method: 'POST', path: '/api/channels/whatsapp/select' },
+  { method: 'POST', path: '/api/channels/whatsapp/connect' },
 ];
 
 export function isOnboardingAllowedRoute(method: string, path: string): boolean {
@@ -113,14 +114,7 @@ export async function requireProfileComplete(
     });
     const store = await prisma.store.findUnique({
       where: { merchantId: req.auth!.merchantId },
-      select: {
-        name: true,
-        businessPhone: true,
-        businessType: true,
-        streetAddress: true,
-        city: true,
-        country: true,
-      },
+      select: { name: true, businessProfile: true },
     });
 
     if (!merchant || !store) {

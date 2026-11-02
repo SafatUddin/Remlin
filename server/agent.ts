@@ -16,10 +16,7 @@ export interface AgentPersona {
   merchantBusinessInfo?: {
     businessPhone?: string;
     businessType?: string;
-    website?: string;
     streetAddress?: string;
-    city?: string;
-    country?: string;
   };
   shareBusinessInfo?: boolean;
 }
@@ -383,16 +380,10 @@ export async function generateAgentReply({
     }
     
     if (businessInfo.businessPhone) parts.push(`Phone: ${businessInfo.businessPhone}`);
-    if (businessInfo.website) parts.push(`Website: ${businessInfo.website}`);
     
     // Store location without province/postalCode
     if (businessInfo.streetAddress) {
-      const addressParts = [
-        businessInfo.streetAddress,
-        businessInfo.city,
-        businessInfo.country,
-      ].filter(Boolean);
-      parts.push(`Our store location is ${addressParts.join(', ')}`);
+      parts.push(`Our store location is ${businessInfo.streetAddress}`);
     }
     
     merchantBusinessInfoText = parts.join('\n');
@@ -450,7 +441,7 @@ ${merchantBusinessInfoText
 
 When customers ask about the shop location, address, contact details, or "where is your shop":
 - Share the Store Location information above
-- Mention specific details like street address, city, phone number
+- Mention specific details like the address and phone number
 - Be helpful and informative about how they can find or contact the physical store`
   : `The merchant operates online only.
 

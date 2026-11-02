@@ -23,14 +23,6 @@ export function createPersonaRouter(): express.Router {
         openingText: store.openingText || '',
         openingImageUrl: store.openingImageUrl || undefined,
         shareBusinessInfo: store.shareBusinessInfo,
-        businessInfo: {
-          businessPhone: store.businessPhone || null,
-          businessType: store.businessType || null,
-          website: store.website || null,
-          streetAddress: store.streetAddress || null,
-          city: store.city || null,
-          country: store.country || null,
-        },
       });
     } catch (err: any) {
       console.error('Fetch persona error:', err);
@@ -67,14 +59,6 @@ export function createPersonaRouter(): express.Router {
         openingText: store.openingText || '',
         openingImageUrl: store.openingImageUrl || undefined,
         shareBusinessInfo: store.shareBusinessInfo,
-        businessInfo: {
-          businessPhone: store.businessPhone || null,
-          businessType: store.businessType || null,
-          website: store.website || null,
-          streetAddress: store.streetAddress || null,
-          city: store.city || null,
-          country: store.country || null,
-        },
       });
     } catch (err: any) {
       console.error('Update persona error:', err);

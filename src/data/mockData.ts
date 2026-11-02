@@ -409,9 +409,9 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
   {
     id: 'int-wa',
     name: 'WhatsApp Business',
-    description: 'Token expired. Re-authenticate to resume high-priority AI lead management and order updates.',
+    description: 'Scan a QR code with your phone to link WhatsApp Business. Remlin then answers customer chats and order updates automatically.',
     connected: false,
-    statusText: 'Sync Paused',
+    statusText: 'Not connected',
     hasAction: true,
     actionText: 'Connect',
     logoType: 'whatsapp',
@@ -452,14 +452,6 @@ export const DEFAULT_AI_PERSONA: AIPersona = {
   style: 'bullets',
   customInstructions: 'Avoid slang. Mention that standard shipping takes 2-3 business days. If they show high interest, offer a custom 10% voucher: COMPOSITE10.',
   shareBusinessInfo: true,
-  businessInfo: {
-    businessPhone: null,
-    businessType: null,
-    website: null,
-    streetAddress: null,
-    city: null,
-    country: null,
-  },
 };
 
 export const RECHART_DATA_30_DAYS: DailyMetric[] = [

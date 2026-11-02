@@ -10,8 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Bot
-  ,CalendarDays
+  Bot,
+  LayoutDashboard
+
 } from 'lucide-react';
 import { Tab } from '../types';
 
@@ -37,11 +38,11 @@ export default function Sidebar({
   onToggleCollapse
 }: SidebarProps) {
   const menuItems = [
+    { id: 'onboarding', label: 'Onboarding', icon: LayoutDashboard },
     { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
     { id: 'catalog', label: 'Product catalog', icon: Package },
     { id: 'persona', label: 'AI Persona', icon: Bot },
     { id: 'orders', label: 'Orders', icon: ClipboardList },
-    { id: 'bookings', label: 'Bookings', icon: CalendarDays },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'integrations', label: 'Integrations', icon: Grid },
   ];

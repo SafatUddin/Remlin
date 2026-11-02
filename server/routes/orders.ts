@@ -4,12 +4,12 @@ import { requireAuth, AuthedRequest } from '../auth';
 import { requireProfileComplete } from '../profileCompletion';
 import { createOrderForConversation } from '../orderCreation';
 import { splitContactDetails } from '../contactDetails';
+import { buildTrackingUrl, buildTrackingMessage, type CourierProvider } from '../courierTracking';
+import { notifyOrderStatus } from '../orderNotifications';
+import { ORDER_STATUS_LABEL, ORDER_LABEL_STATUS, type OrderStatusEnum, type OrderStatusLabel } from '../../shared/orderStatus';
 
-const toPublicOrder = (o: { id: string; conversationId: string | null; items: any; customerName: string; customerPhone: string | null; address: string; status: string; total: any; createdAt: Date }) => {
-  let publicStatus: 'Processing' | 'On the Way' | 'Delivered' | 'Cancelled' = 'Processing';
-  if (o.status === 'ON_THE_WAY') publicStatus = 'On the Way';
-  else if (o.status === 'DELIVERED') publicStatus = 'Delivered';
-  else if (o.status === 'CANCELLED') publicStatus = 'Cancelled';
+const toPublicOrder = (o: { id: string; conversationId: string | null; items: any; customerName: string; customerPhone: string | null; address: string; status: string; total: any; createdAt: Date; trackingCode?: string | null; trackingUrl?: string | null }) => {
+  const publicStatus: OrderStatusLabel = ORDER_STATUS_LABEL[o.status as OrderStatusEnum] || 'Processing';
   return {
     id: o.id,
     conversationId: o.conversationId,
@@ -20,6 +20,8 @@ const toPublicOrder = (o: { id: string; conversationId: string | null; items: an
     status: publicStatus,
     total: Number(o.total),
     createdAt: o.createdAt,
+    trackingCode: o.trackingCode ?? null,
+    trackingUrl: o.trackingUrl ?? null,
   };
 };
 
@@ -43,14 +45,8 @@ export function createOrdersRouter(): express.Router {
   // Update an order's status
   router.patch('/api/orders/:id', requireAuth, requireProfileComplete, async (req: AuthedRequest, res) => {
     try {
-      const { status } = req.body;
-      const statusMap: Record<string, 'PROCESSING' | 'ON_THE_WAY' | 'DELIVERED' | 'CANCELLED'> = {
-        'Processing': 'PROCESSING',
-        'On the Way': 'ON_THE_WAY',
-        'Delivered': 'DELIVERED',
-        'Cancelled': 'CANCELLED',
-      };
-      const mapped = statusMap[status];
+      const { status, trackingCode } = req.body;
+      const mapped = ORDER_LABEL_STATUS[status] as OrderStatusEnum | undefined;
       if (!mapped) return res.status(400).json({ error: 'Invalid status' });
 
       const order = await prisma.order.findUnique({ where: { id: req.params.id } });
@@ -81,7 +77,33 @@ export function createOrdersRouter(): express.Router {
         return res.json(toPublicOrder(updatedOrder!));
       }
 
-      const updated = await prisma.order.update({ where: { id: order.id }, data: { status: mapped } });
+      const data: { status: OrderStatusEnum; trackingCode?: string; trackingUrl?: string } = { status: mapped };
+      let transitText: string | null = null;
+      const store = await prisma.store.findUnique({ where: { id: order.storeId }, select: { courier: true, businessProfile: true } });
+
+      // Handing the parcel to the courier: needs the courier set up and, for a connected
+      // courier, its tracking code (turned into the customer's tracking link).
+      if (mapped === 'ON_THE_WAY' && order.status !== 'ON_THE_WAY') {
+        const courier = (store?.courier || {}) as { provider?: CourierProvider; credentials?: unknown; skipped?: boolean };
+        if (courier.provider && courier.credentials) {
+          const code = typeof trackingCode === 'string' ? trackingCode.trim() : '';
+          if (!/^[A-Za-z0-9._-]{3,80}$/.test(code)) {
+            return res.status(400).json({ error: 'Enter the courier tracking code (letters and numbers, 3–80 characters).' });
+          }
+          data.trackingCode = code;
+          data.trackingUrl = buildTrackingUrl(courier.provider, code, order.customerPhone);
+          transitText = buildTrackingMessage({ customerName: order.customerName, provider: courier.provider, code, url: data.trackingUrl });
+        } else if (!courier.skipped) {
+          return res.status(400).json({ error: 'Set up your courier in the setup guide before marking an order In transit.' });
+        }
+      }
+
+      const updated = await prisma.order.update({ where: { id: order.id }, data });
+
+      // Message the customer when the owner ticked this step in "Your business".
+      if (mapped !== order.status) {
+        await notifyOrderStatus(order, mapped, store?.businessProfile, transitText);
+      }
       res.json(toPublicOrder(updated));
     } catch (err: any) {
       console.error('Update order error:', err);

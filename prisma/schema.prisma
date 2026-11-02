@@ -39,13 +39,9 @@ enum OrderStatus {
   ON_THE_WAY
   DELIVERED
   CANCELLED
-}
-
-enum AppointmentStatus {
-  REQUESTED
-  CONFIRMED
-  CANCELLED
-  COMPLETED
+  READY_TO_SHIP
+  OUT_FOR_DELIVERY
+  DELIVERY_FAILED
 }
 
 model Merchant {
@@ -80,13 +76,18 @@ model Store {
   openingText     String?
   openingImageUrl String?
   widgetKey     String         @unique @default(cuid())
-  // Business contact & address fields (all optional; set via merchant settings)
+  // LEGACY business contact fields — no longer read or written by the app. The "Your business"
+  // details now live in businessProfile (sell / hotline / address / …). Safe to drop in a later migration.
   businessPhone String?
   businessType  String?
   website       String?
   streetAddress String?
   city          String?
   country       String?
+  // Setup-guide business details (hours, delivery, payment, tone…) as JSON
+  businessProfile Json?
+  // Courier setup: provider, encrypted API credentials, webhook token (see server/routes/courier.ts)
+  courier Json?
   // Toggle to control whether AI should share business contact info with customers
   shareBusinessInfo Boolean @default(true)
   // Exactly one catalog source may be active at a time. CUSTOM means manual entry.
@@ -95,7 +96,6 @@ model Store {
   channels      Channel[]
   conversations Conversation[]
   orders        Order[]
-  appointments  Appointment[]
   knowledgeDocuments KnowledgeDocument[]
   createdAt     DateTime       @default(now())
 }
@@ -252,28 +252,6 @@ model Message {
   createdAt      DateTime     @default(now())
 }
 
-model Appointment {
-  id                   String            @id @default(cuid())
-  store                Store             @relation(fields: [storeId], references: [id])
-  storeId              String
-  conversationId       String?
-  customerName         String
-  customerPhone        String?
-  service              String
-  startsAt             DateTime
-  endsAt               DateTime
-  status               AppointmentStatus @default(REQUESTED)
-  advanceAmount        Decimal?
-  advancePaymentMethod String?
-  advanceTransactionId String?
-  notes                String?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-
-  @@index([storeId, startsAt])
-  @@index([storeId, status])
-}
-
 model Order {
   id             String      @id @default(cuid())
   store          Store       @relation(fields: [storeId], references: [id])
@@ -285,6 +263,10 @@ model Order {
   address        String
   status         OrderStatus @default(PROCESSING)
   total          Decimal
+  // Courier consignment / tracking code and the customer-facing tracking link, set when the
+  // order is handed to the delivery service (status ON_THE_WAY, shown as "In transit").
+  trackingCode   String?
+  trackingUrl    String?
   createdAt      DateTime    @default(now())
 
   @@index([storeId])
