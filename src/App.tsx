@@ -43,6 +43,7 @@ import Sidebar from './components/Sidebar';
 import InboxConsole from './components/InboxConsole';
 import ProductCatalog from './components/ProductCatalog';
 import AgentPersona from './components/AgentPersona';
+import { useResizableWidth } from './lib/useResizableWidth';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import IntegrationsHub from './components/IntegrationsHub';
 import OrdersPage from './components/OrdersPage';
@@ -67,6 +68,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('landing');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const sidebarResize = useResizableWidth('remlin.sidebar.width', 290, 230, 420, 1);
   const mainRef = useRef<HTMLElement>(null);
 
   // Reset scroll to top whenever the active tab changes
@@ -702,7 +704,10 @@ export default function App() {
   }
 
   return (
-    <div className="app-bg-gradient min-h-screen text-on-surface w-full relative overflow-x-hidden">
+    <div
+      className="app-bg-gradient min-h-screen text-on-surface w-full relative overflow-x-hidden"
+      style={{ '--sidebar-w': isSidebarCollapsed ? '96px' : `${sidebarResize.width}px` } as React.CSSProperties}
+    >
       {/* Ambient bloom effects */}
       <div className="ambient-bloom-tl" />
       <div className="ambient-bloom-br" />
@@ -737,10 +742,16 @@ export default function App() {
               onClose={() => setIsSidebarOpen(false)}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+              copilot={{
+                total: conversations.filter((c) => c.status !== 'Closed').length,
+                managed: conversations.filter((c) => c.status === 'AI Managed').length,
+              }}
+              resizeHandleProps={sidebarResize.handleProps}
+              isResizing={sidebarResize.dragging}
             />
 
             {/* Core Content Area — h-screen, inner page content scrolls without visible scrollbar */}
-            <main ref={mainRef} className={`pl-0 ${isSidebarCollapsed ? 'md:pl-24' : 'md:pl-[290px]'} h-screen flex flex-col flex-1 min-w-0 ${activeTab === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar transition-all duration-300 relative z-10`}>
+            <main ref={mainRef} className={`pl-0 md:pl-[var(--sidebar-w)] h-screen flex flex-col flex-1 min-w-0 ${activeTab === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar ${sidebarResize.dragging ? '' : 'transition-all duration-300'} relative z-10`}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}

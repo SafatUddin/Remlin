@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useResizableWidth } from '../lib/useResizableWidth';
 import { 
   Send, 
   Sparkles, 
@@ -136,6 +137,8 @@ export default function InboxConsole({
   onDeleteConversation
 }: InboxConsoleProps) {
   const storeCurrency = React.useMemo(() => getCatalogCurrency(products), [products]);
+  const leftPane = useResizableWidth('remlin.inbox.listWidth', 360, 260, 480, 1);
+  const rightPane = useResizableWidth('remlin.inbox.cartWidth', 300, 240, 380, -1);
   const [selectedChatId, setSelectedChatId] = useState(conversations[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [inputText, setInputText] = useState('');
@@ -606,10 +609,13 @@ export default function InboxConsole({
         </div>
 
         {/* Unified Apple Glass Workspace Container */}
-        <div className="flex-grow min-h-0 flex overflow-hidden w-full rounded-2xl border border-white/15 bg-[#0a0b10] shadow-2xl divide-x divide-white/[0.08]">
-        
+        <div
+          className="flex-grow min-h-0 flex overflow-hidden w-full rounded-2xl border border-white/15 bg-[#0a0b10] shadow-2xl divide-x divide-white/[0.08]"
+          style={{ '--inbox-left': `${leftPane.width}px`, '--inbox-right': `${rightPane.width}px` } as React.CSSProperties}
+        >
+
           {/* Pane 1: Left Conversation List */}
-          <aside className="bg-[#101117] flex flex-col h-full lg:w-[32%] min-w-[280px] w-full overflow-hidden shrink-0">
+          <aside className="bg-[#101117] flex flex-col h-full lg:w-[var(--inbox-left)] min-w-[260px] w-full overflow-hidden shrink-0">
             <header className="h-16 px-4 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-white/[0.01]">
               <h3 className="font-sans font-bold text-[15px] text-white">
                 Conversations
@@ -688,6 +694,11 @@ export default function InboxConsole({
               })}
             </div>
           </aside>
+          <div
+            {...leftPane.handleProps}
+            title="Drag to resize · double-click to reset"
+            className={`hidden lg:block w-1.5 -mx-[3px] z-10 shrink-0 cursor-col-resize transition-colors ${leftPane.dragging ? 'bg-[#00a8e8]/60' : 'hover:bg-[#00a8e8]/40'}`}
+          />
 
           {/* Pane 2: Middle Message Thread */}
           <main className={`bg-[#07080b] flex flex-col h-full min-w-[360px] flex-1 overflow-hidden relative ${mobileView === 'chat' ? 'flex' : 'hidden lg:flex'}`}>
@@ -1033,7 +1044,12 @@ export default function InboxConsole({
           </main>
 
           {/* Pane 3: Right Cart Panel (No top header bar, section-based layout) */}
-          <aside className={`bg-[#0d0e14] flex flex-col h-full lg:w-[22%] min-w-[240px] overflow-hidden shrink-0 ${mobileView === 'info' ? 'flex' : 'hidden lg:flex'}`}>
+          <div
+            {...rightPane.handleProps}
+            title="Drag to resize · double-click to reset"
+            className={`hidden lg:block w-1.5 -mx-[3px] z-10 shrink-0 cursor-col-resize transition-colors ${rightPane.dragging ? 'bg-[#00a8e8]/60' : 'hover:bg-[#00a8e8]/40'}`}
+          />
+          <aside className={`bg-[#0d0e14] flex flex-col h-full lg:w-[var(--inbox-right)] min-w-[240px] overflow-hidden shrink-0 ${mobileView === 'info' ? 'flex' : 'hidden lg:flex'}`}>
             <section className="p-4 space-y-4 flex-grow min-h-0 overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between">
                 <h4 className="font-sans text-[13px] font-bold text-white/80 tracking-wide uppercase">

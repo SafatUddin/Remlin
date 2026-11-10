@@ -234,6 +234,17 @@ export async function generateAndStoreAgentReply(
   const products = storedProducts.map((p) => ({ ...p, name: resolveProductName(p) }));
   if (!store || !currentConversation) return;
 
+  // A chat the merchant marked as spam gets no AI reply (no cost, nothing sent back to the
+  // sender). The message itself is already stored, so the merchant can still see it.
+  if (currentConversation.isSpam) {
+    if (!isProduction) console.log('[AGENT REPLY] skipped — conversation is marked spam:', conversation.id);
+    return;
+  }
+  // A new customer message brings an archived chat back to the main inbox so it isn't missed.
+  if (currentConversation.isArchived) {
+    await prisma.conversation.update({ where: { id: conversation.id }, data: { isArchived: false } });
+  }
+
   const persona = {
     storeName: store.name,
     tone: store.tone,

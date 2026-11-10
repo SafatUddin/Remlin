@@ -26,7 +26,15 @@ interface SidebarProps {
   onClose?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  /** Open (non-closed) chats and how many of them the AI is handling on autopilot. */
+  copilot: { total: number; managed: number };
+  resizeHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  isResizing?: boolean;
 }
+
+// Same gradient and glow as the inbox "AI copilot" toggle.
+const COPILOT_GRADIENT = 'linear-gradient(to right, #2176ff, #00a8e8, #00d2ff)';
+const COPILOT_GLOW = '0 0 25px rgba(0, 168, 232, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.7)';
 
 export default function Sidebar({ 
   activeTab, 
@@ -35,8 +43,18 @@ export default function Sidebar({
   isOpen = false, 
   onClose,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  copilot,
+  resizeHandleProps,
+  isResizing = false
 }: SidebarProps) {
+  const copilotOn = copilot.managed > 0;
+  const copilotPct = copilot.total > 0 ? Math.round((copilot.managed / copilot.total) * 100) : 0;
+  const copilotLabel = copilotOn ? 'Copilot on' : 'Copilot off';
+  const copilotDetail = copilot.total === 0
+    ? 'No open chats yet'
+    : `${copilot.managed} of ${copilot.total} open chat${copilot.total === 1 ? '' : 's'} on autopilot`;
+
   const menuItems = [
     { id: 'onboarding', label: 'Onboarding', icon: LayoutDashboard },
     { id: 'inbox', label: 'Unified inbox', icon: MessageSquare },
@@ -57,8 +75,10 @@ export default function Sidebar({
         />
       )}
 
-      <aside className={`zone-a-sidebar flex flex-col justify-between h-screen fixed top-0 left-0 z-50 md:z-30 select-none transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-        isCollapsed ? 'w-[92px]' : 'w-[290px]'
+      <aside className={`zone-a-sidebar flex flex-col justify-between h-screen fixed top-0 left-0 z-50 md:z-30 select-none ${
+        isResizing ? '' : 'transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]'
+      } ${
+        isCollapsed ? 'w-[92px]' : 'w-[290px] md:w-[var(--sidebar-w)]'
       } ${
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
@@ -138,19 +158,30 @@ export default function Sidebar({
 
         {/* Footer / AI Training & Settings */}
         <div className={`p-4 border-t border-white/[0.08] ${isCollapsed ? 'flex flex-col items-center gap-4 px-0' : 'space-y-4'}`}>
-          {/* AI Training Active Card */}
+          {/* Copilot status — reflects how many open chats are actually on autopilot */}
           {isCollapsed ? (
-            <div className="p-2 bg-white/[0.06] border border-white/10 rounded-full" title="AI training active (78%)">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#3ddc84] block animate-pulse-dot shadow-[0_0_10px_rgba(61,220,132,0.9)]" />
+            <div
+              className={`p-2 rounded-full border transition-all ${copilotOn ? 'border-white/50 ring-1 ring-white/20' : 'bg-white/[0.06] border-white/10'}`}
+              style={copilotOn ? { background: COPILOT_GRADIENT, boxShadow: COPILOT_GLOW } : undefined}
+              title={`${copilotLabel} — ${copilotDetail}`}
+            >
+              <span className={`w-2.5 h-2.5 rounded-full block ${copilotOn ? 'bg-white animate-pulse-dot shadow-[0_0_8px_rgba(255,255,255,0.9)]' : 'bg-white/30'}`} />
             </div>
           ) : (
-            <div className="p-3.5 bg-white/[0.06] border border-white/10 rounded-2xl">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-[#3ddc84] block animate-pulse-dot shadow-[0_0_8px_rgba(61,220,132,0.9)]" />
-                <span className="font-sans text-[11.5px] font-bold text-white">AI training active</span>
+            <div
+              className={`p-3.5 rounded-2xl border transition-all ${copilotOn ? 'border-white/50 ring-1 ring-white/20' : 'bg-white/[0.06] border-white/10'}`}
+              style={copilotOn ? { background: COPILOT_GRADIENT, boxShadow: COPILOT_GLOW } : undefined}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`w-2 h-2 rounded-full block ${copilotOn ? 'bg-white animate-pulse-dot shadow-[0_0_8px_rgba(255,255,255,0.9)]' : 'bg-white/30'}`} />
+                <span className={`font-sans text-[11.5px] font-bold text-white`}>{copilotLabel}</span>
               </div>
-              <div className="w-full bg-white/10 h-[5px] rounded-full overflow-hidden">
-                <div className="bg-gradient-to-r from-white to-[#a9c6ff] h-full w-[78%] shadow-[0_0_10px_rgba(169,198,255,0.7)]" />
+              <p className={`font-sans text-[10.5px] mb-2 truncate ${copilotOn ? 'text-white/80' : 'text-white/50'}`}>{copilotDetail}</p>
+              <div className={`w-full h-[5px] rounded-full overflow-hidden ${copilotOn ? 'bg-black/25' : 'bg-white/10'}`}>
+                <div
+                  className="h-full transition-all duration-500"
+                  style={{ width: `${copilotPct}%`, background: '#fff', boxShadow: '0 0 8px rgba(255,255,255,0.8)' }}
+                />
               </div>
             </div>
           )}
@@ -188,6 +219,15 @@ export default function Sidebar({
             </button>
           </div>
         </div>
+
+        {/* Drag the right edge to resize (double-click to reset) */}
+        {!isCollapsed && resizeHandleProps && (
+          <div
+            {...resizeHandleProps}
+            title="Drag to resize · double-click to reset"
+            className={`hidden md:block absolute top-0 -right-1 w-2 h-full z-40 cursor-col-resize transition-colors ${isResizing ? 'bg-[#00a8e8]/50' : 'hover:bg-[#00a8e8]/35'}`}
+          />
+        )}
       </aside>
     </>
   );

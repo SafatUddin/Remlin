@@ -101,10 +101,10 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         /* Navbar */
         .demo-navbar {
           position: relative;
-          width: 491px;
-          padding: 6px 7px;
+          width: 640px;
+          padding: 8px 9px;
           border: 1.003px solid var(--demo-nav-border);
-          border-radius: 66.875px;
+          border-radius: 86px;
           background: rgba(25, 25, 25, 0.2);
           box-shadow: 16px 17px 19.1px 0 rgba(0, 0, 0, 0.25), inset 0 0.669px 0 0 rgba(255, 255, 255, 0.08);
           backdrop-filter: blur(6px);
@@ -114,14 +114,14 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         .demo-navbar__inner {
           display: flex;
           align-items: center;
-          gap: 78px;
+          gap: 100px;
         }
 
         .demo-navbar__logo {
           position: relative;
           flex-shrink: 0;
-          width: 37px;
-          height: 37px;
+          width: 48px;
+          height: 48px;
           border: 1.16px solid var(--demo-nav-border);
           border-radius: 50%;
           background: var(--demo-bg);
@@ -132,20 +132,20 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
 
         .demo-navbar__logo img {
           position: absolute;
-          left: 8.78px;
-          top: 7.61px;
-          width: 18.96px;
-          height: 19.21px;
+          left: 11.4px;
+          top: 9.9px;
+          width: 24.6px;
+          height: 24.9px;
           display: block;
         }
 
         .demo-navbar__links {
           display: flex;
           align-items: center;
-          gap: 12px;
-          font-size: 10.031px;
+          gap: 18px;
+          font-size: 13px;
           font-weight: 500;
-          letter-spacing: -0.1003px;
+          letter-spacing: -0.13px;
           color: var(--demo-nav-link);
           white-space: nowrap;
           list-style: none;
@@ -167,8 +167,13 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         .demo-navbar__actions {
           display: flex;
           align-items: center;
-          gap: 5px;
+          gap: 7px;
         }
+
+        /* Navbar buttons run larger than the page's other .demo-btn instances */
+        .demo-navbar .demo-btn { font-size: 11.5px; letter-spacing: -0.115px; }
+        .demo-navbar .demo-btn--ghost { height: 36px; padding: 0 20px; line-height: 17px; }
+        .demo-navbar .demo-btn--primary { width: 110px; padding: 10px; line-height: 14px; }
 
         /* Buttons */
         .demo-btn {
@@ -737,6 +742,143 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         .demo-channel__icon--messenger { left: 34.1px; top: 34.1px; width: 76.449px; height: 76.449px; }
         .demo-channel__icon--instagram { left: 34.1px; top: 31.75px; width: 75.273px; height: 75.273px; }
 
+        /* Pricing */
+        .demo-pricing {
+          width: 1271.846px;
+          margin: 0 auto;
+          padding: 96px 0 40px;
+          display: flex;
+          flex-direction: column;
+          gap: 40px;
+          scroll-margin-top: 24px;
+        }
+
+        .demo-pricing__head {
+          display: flex;
+          flex-direction: column;
+          gap: 13.337px;
+          max-width: 640px;
+        }
+
+        .demo-pricing__title {
+          font-size: 47.939px;
+          font-weight: 600;
+          letter-spacing: -1.9175px;
+          line-height: normal;
+          margin: 0;
+        }
+
+        .demo-pricing__desc {
+          font-size: 19.974px;
+          font-weight: 300;
+          letter-spacing: -0.799px;
+          color: var(--demo-text-muted);
+          margin: 0;
+        }
+
+        .demo-pricing__grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+        }
+
+        .demo-plan {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 28px 24px;
+          border: 1px solid #3a3a3a;
+          background: rgba(25, 25, 25, 0.2);
+        }
+
+        .demo-plan--best {
+          border-color: var(--demo-nav-border);
+          box-shadow: inset 0 0.787px 0 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .demo-plan__tag {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          padding: 3px 10px;
+          border: 1px solid var(--demo-nav-border);
+          border-radius: 999px;
+          font-size: 12px;
+          color: var(--demo-nav-link);
+        }
+
+        .demo-plan__label {
+          font-size: 15px;
+          color: var(--demo-text-muted);
+        }
+
+        .demo-plan__price {
+          font-size: 38px;
+          font-weight: 600;
+          letter-spacing: -1.4px;
+        }
+
+        .demo-plan__bonus {
+          font-size: 15px;
+          color: var(--demo-nav-link);
+          min-height: 22px;
+        }
+
+        .demo-plan__rows {
+          margin-top: 14px;
+          padding-top: 14px;
+          border-top: 1px solid #2e2e2e;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 15px;
+          color: var(--demo-text-muted);
+        }
+
+        .demo-plan__rows strong {
+          color: var(--demo-text);
+          font-weight: 500;
+        }
+
+        .demo-pricing__lower {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        .demo-pricing__box {
+          padding: 28px 24px;
+          border: 1px solid #3a3a3a;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .demo-pricing__box h3 {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: -0.6px;
+        }
+
+        .demo-pricing__box ul {
+          margin: 0;
+          padding-left: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          font-size: 15px;
+          line-height: 1.5;
+          color: var(--demo-text-muted);
+        }
+
+        .demo-pricing__note {
+          font-size: 14px;
+          color: var(--demo-text-muted);
+          margin: 0;
+        }
+
         /* Predictive */
         .demo-predictive {
           position: relative;
@@ -950,6 +1092,26 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           .demo-page {
             width: 100%;
             padding: 0 16px;
+          }
+
+          .demo-pricing {
+            width: 100%;
+            padding: 64px 0 24px;
+            gap: 28px;
+          }
+
+          .demo-pricing__title {
+            font-size: 36px;
+            letter-spacing: -1.4px;
+          }
+
+          .demo-pricing__desc {
+            font-size: 17px;
+          }
+
+          .demo-pricing__grid,
+          .demo-pricing__lower {
+            grid-template-columns: 1fr;
           }
 
           .demo-stats {
@@ -1205,7 +1367,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               </div>
               <ul className="demo-navbar__links">
                 <li><a href="#top">Product</a></li>
-                <li><a href="#">Pricing</a></li>
+                <li><a href="#pricing">Pricing</a></li>
                 <li><a href="#features">Features</a></li>
               </ul>
               <div className="demo-navbar__actions">
@@ -1377,6 +1539,66 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="demo-channel">
                 <img className="demo-channel__icon demo-channel__icon--instagram" src="/assets/icon-instagram.svg" alt="Instagram" />
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing */}
+        <section className="demo-pricing" id="pricing">
+          <div className="demo-pricing__head">
+            <h2 className="demo-pricing__title">Simple, pay-as-you-go pricing</h2>
+            <p className="demo-pricing__desc">
+              10 paisa per AI reply. Prepaid wallet. No commission, no monthly fee. Top up more, get bonus credit.
+            </p>
+          </div>
+
+          <div className="demo-pricing__grid">
+            {[
+              { topup: '300', bonus: 'Minimum top-up', credit: '300', rate: '10.0', replies: '3,000', best: false },
+              { topup: '1,000', bonus: '+10% bonus', credit: '1,100', rate: '9.1', replies: '11,000', best: false },
+              { topup: '2,500', bonus: '+20% bonus', credit: '3,000', rate: '8.3', replies: '30,000', best: false },
+              { topup: '5,000', bonus: '+25% bonus', credit: '6,250', rate: '8.0', replies: '62,500', best: true },
+            ].map((plan) => (
+              <article key={plan.topup} className={`demo-plan${plan.best ? ' demo-plan--best' : ''}`}>
+                {plan.best && <span className="demo-plan__tag">Best value</span>}
+                <span className="demo-plan__label">Top up</span>
+                <span className="demo-plan__price">৳{plan.topup}</span>
+                <span className="demo-plan__bonus">{plan.bonus}</span>
+                <div className="demo-plan__rows">
+                  <span>You get <strong>৳{plan.credit}</strong> credit</span>
+                  <span><strong>{plan.replies}</strong> AI replies</span>
+                  <span>Effective <strong>{plan.rate} paisa</strong> per reply</span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="demo-pricing__lower">
+            <div className="demo-pricing__box">
+              <h3>Try it free first</h3>
+              <ul>
+                <li>14 days or 100 conversations (about 800 replies), whichever comes first.</li>
+                <li>No payment needed and no commission.</li>
+                <li>One trial per Facebook Page and per verified phone number.</li>
+                <li>When the trial ends, chats are handed to you with a notice, never left unanswered. You also get a summary of conversations handled and replies sent.</li>
+              </ul>
+              <div>
+                <button className="demo-btn demo-btn--primary demo-btn--lg" onClick={() => onNavigate('signup')}>
+                  Start free trial →
+                </button>
+              </div>
+            </div>
+
+            <div className="demo-pricing__box">
+              <h3>What counts as a reply</h3>
+              <ul>
+                <li>One billable reply is one AI message sent to a customer.</li>
+                <li>Not charged: handoffs to a human and messages that fail to send.</li>
+                <li>A reply to an image or a voice note counts as 2 replies.</li>
+                <li>Credit is valid for 90 days from top-up.</li>
+                <li>Low-balance alert with a one-tap bKash or Nagad top-up link. If you run out, a 100-reply buffer keeps customers served while you top up.</li>
+              </ul>
+              <p className="demo-pricing__note">Pay with bKash, Nagad or Rocket.</p>
             </div>
           </div>
         </section>

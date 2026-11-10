@@ -67,7 +67,7 @@ export default function AgentPersona({
   };
 
   return (
-    <div className="w-full flex-grow flex flex-col text-left bg-[#0a0a0b]">
+    <div className="w-full flex-grow flex flex-col text-left">
       <DashboardHeader title="AI PERSONA" searchPlaceholder="Search settings…" />
 
       <div className="w-full flex-grow p-6 md:p-8 overflow-y-auto">
