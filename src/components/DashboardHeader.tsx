@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Search, Settings, LogOut, ChevronDown, MessageSquare, AlertCircle, Menu, ArrowRight } from 'lucide-react';
+import { Bell, Search, Settings, LogOut, ChevronDown, MessageSquare, AlertCircle, Menu, ArrowRight, ShoppingBag, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { listNotifications, ApiNotification } from '../lib/api';
 
@@ -79,28 +79,90 @@ export default function DashboardHeader({
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+
+  // Load read IDs from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('read_notifications');
+      if (saved) {
+        setReadIds(new Set(JSON.parse(saved)));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Listen for notification read events from other components
+  useEffect(() => {
+    const handleNotificationRead = (e: Event) => {
+      const readId = (e as CustomEvent).detail;
+      setReadIds((prev) => new Set(prev).add(readId));
+    };
+    const handleAllNotificationsRead = () => {
+      setReadIds(new Set(notifications.map((n) => n.id)));
+    };
+    window.addEventListener('notification_read', handleNotificationRead);
+    window.addEventListener('notification_all_read', handleAllNotificationsRead);
+    return () => {
+      window.removeEventListener('notification_read', handleNotificationRead);
+      window.removeEventListener('notification_all_read', handleAllNotificationsRead);
+    };
+  }, [notifications]);
+
+  const load = () => {
+    listNotifications().then(setNotifications).catch((err) => console.error('Failed to load notifications:', err));
+  };
 
   useEffect(() => {
-    const load = () => {
-      listNotifications().then(setNotifications).catch((err) => console.error('Failed to load notifications:', err));
-    };
     load();
     const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const visibleNotifications = notifications.filter((n) => !dismissedIds.has(n.id));
+  const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
+
+  const saveReadIds = (ids: Set<string>) => {
+    try {
+      localStorage.setItem('read_notifications', JSON.stringify(Array.from(ids)));
+    } catch {
+      // ignore
+    }
+  };
 
   const handleMarkAllAsRead = () => {
-    setDismissedIds(new Set(notifications.map((n) => n.id)));
+    const newReadIds = new Set(notifications.map((n) => n.id));
+    setReadIds(newReadIds);
+    saveReadIds(newReadIds);
+    window.dispatchEvent(new CustomEvent('notification_all_read'));
   };
 
   const handleMarkAsRead = (id: string) => {
-    setDismissedIds((prev) => new Set(prev).add(id));
+    const newReadIds = new Set(readIds).add(id);
+    setReadIds(newReadIds);
+    saveReadIds(newReadIds);
+    window.dispatchEvent(new CustomEvent('notification_read', { detail: id }));
   };
 
-  const unreadCount = visibleNotifications.length;
+  const handleNotificationClick = (n: ApiNotification) => {
+    handleMarkAsRead(n.id);
+    setNotificationsOpen(false);
+
+    if (n.type === 'order') {
+      window.dispatchEvent(new CustomEvent('shopmate_navigate', { detail: 'orders' }));
+    }
+  };
+
+  const handleCustomerNameClick = (e: React.MouseEvent, n: ApiNotification) => {
+    e.stopPropagation();
+    handleMarkAsRead(n.id);
+    setNotificationsOpen(false);
+
+    if (n.conversationId) {
+      window.dispatchEvent(new CustomEvent('shopmate_open_conversation', { detail: n.conversationId }));
+      window.dispatchEvent(new CustomEvent('shopmate_navigate', { detail: 'inbox' }));
+    }
+  };
 
   const [profile, setProfile] = useState<HeaderProfile>(() => {
     const saved = localStorage.getItem('shopmate_user_profile');
@@ -219,55 +281,107 @@ export default function DashboardHeader({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-2 w-80 zone-b-grey3 p-1 flex flex-col z-50 overflow-hidden"
+                className="absolute right-0 mt-2 w-96 zone-b-grey3 rounded-2xl p-1 flex flex-col z-50 overflow-hidden"
+                style={{
+                  boxShadow: '0 40px 100px rgba(0,0,0,0.70), inset 0 1px 0 rgba(255,255,255,0.16)',
+                }}
               >
-                <div className="px-4 py-3 border-b border-white/[0.07] flex justify-between items-center bg-black/40">
-                  <span className="font-sans font-bold text-xs text-white">Notifications</span>
+                <div className="px-4 py-3.5 border-b border-white/[0.11] flex justify-between items-center bg-black/40 rounded-t-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="font-sans font-bold text-xs text-white">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-white/[0.22] text-white text-[10px] font-bold">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {unreadCount > 0 && (
-                    <button 
+                    <button
                       onClick={handleMarkAllAsRead}
-                      className="text-[10.5px] text-[#7aa8ff] hover:text-[#a9c6ff] font-medium transition-colors cursor-pointer"
+                      className="text-[10.5px] text-white/60 hover:text-white font-medium transition-colors cursor-pointer"
                     >
                       Mark all read
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-72 overflow-y-auto divide-y divide-white/[0.05] no-scrollbar">
-                  {visibleNotifications.length === 0 ? (
-                    <div className="p-8 text-center text-white/40 text-xs font-sans">
-                      No new notifications.
+                <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.055] no-scrollbar">
+                  {notifications.length === 0 ? (
+                    <div className="p-10 text-center">
+                      <div className="w-12 h-12 rounded-full bg-white/[0.05] flex items-center justify-center mx-auto mb-3">
+                        <Bell className="h-5 w-5 text-white/30" />
+                      </div>
+                      <p className="text-xs text-white/40 font-sans">No notifications</p>
                     </div>
                   ) : (
-                    visibleNotifications.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => handleMarkAsRead(n.id)}
-                        className="p-3 text-left transition-colors cursor-pointer flex gap-2.5 items-start hover:bg-white/[0.04]"
-                      >
-                        <div className="p-1.5 rounded-lg bg-white/10 text-white/80 shrink-0 mt-0.5">
-                          {n.type === 'message' ? (
-                            <MessageSquare className="h-3.5 w-3.5" />
-                          ) : (
-                            <AlertCircle className="h-3.5 w-3.5" />
-                          )}
-                        </div>
+                    notifications.map((n) => {
+                      const isRead = readIds.has(n.id);
 
-                        <div className="flex-grow min-w-0 space-y-0.5">
-                          <div className="flex justify-between items-center">
-                            <span className="font-sans text-[12px] truncate text-white font-semibold">
-                              {n.title}
-                            </span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#4d8bff] shrink-0 ml-2" />
+                      return (
+                        <div
+                          key={n.id}
+                          onClick={() => handleNotificationClick(n)}
+                          className="p-3.5 text-left transition-colors cursor-pointer flex gap-3 items-start hover:bg-white/[0.04] group"
+                          style={{
+                            background: isRead ? 'rgba(255,255,255,0.02)' : 'transparent',
+                          }}
+                        >
+                          <div className="p-2 rounded-xl bg-white/10 text-white/80 shrink-0 mt-0.5">
+                            {n.type === 'message' ? (
+                              <MessageSquare className="h-4 w-4" />
+                            ) : n.type === 'order' ? (
+                              <ShoppingBag className="h-4 w-4" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4" />
+                            )}
                           </div>
-                          <p className="font-sans text-[11px] text-white/60 leading-normal line-clamp-2">
-                            {n.body}
-                          </p>
-                          <p className="text-[10px] text-white/40 font-sans">{formatRelativeTime(n.time)}</p>
+
+                          <div className="flex-grow min-w-0 space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-sans text-[12px] font-semibold text-white">
+                                {n.title}
+                              </span>
+                              {!isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#3ddc84] shrink-0 mt-1" style={{ boxShadow: '0 0 10px rgba(61,220,132,0.9)' }} />
+                              )}
+                            </div>
+                            <p className="font-sans text-[11px] text-white/60 leading-relaxed line-clamp-2">
+                              {n.type === 'order' && n.customerName ? (
+                                <>
+                                  <span
+                                    onClick={(e) => handleCustomerNameClick(e, n)}
+                                    className="text-white/86 hover:text-white cursor-pointer font-medium"
+                                  >
+                                    {n.customerName}
+                                  </span>
+                                  {' '}{n.body}
+                                </>
+                              ) : (
+                                n.body
+                              )}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-white/40 font-sans">
+                              <span>{formatRelativeTime(n.time)}</span>
+                              <span className="text-white/20">·</span>
+                              <span className="capitalize">{n.platform}</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
+                </div>
+
+                <div className="px-3 py-2 border-t border-white/[0.11] bg-black/40 rounded-b-xl">
+                  <button
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      window.dispatchEvent(new CustomEvent('shopmate_navigate', { detail: 'notifications' }));
+                    }}
+                    className="w-full py-2 text-[11px] text-white/60 hover:text-white font-medium transition-colors cursor-pointer"
+                  >
+                    View all notifications
+                  </button>
                 </div>
               </motion.div>
             )}

@@ -10,12 +10,17 @@ export default function OrdersPage({ products = [] }: { products?: Product[] }) 
   const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const loadOrders = () => {
-    listOrders().then(setOrders).catch((err) => console.error('Failed to load orders:', err));
+    listOrders()
+      .then(setOrders)
+      .catch((err) => console.error('Failed to load orders:', err))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
+    setLoading(true);
     loadOrders();
   }, []);
 
@@ -85,27 +90,32 @@ export default function OrdersPage({ products = [] }: { products?: Product[] }) 
 
           <div className="border border-white/[0.07] rounded-2xl overflow-hidden bg-black/30 w-full">
             <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 w-full">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white/[0.05] border-b border-white/[0.07] text-[11px] font-sans text-white/50 tracking-[0.11em] font-bold">
-                    <th className="p-4">Customer</th>
-                    <th className="p-4">Items</th>
-                    <th className="p-4">Phone</th>
-                    <th className="p-4">Address</th>
-                    <th className="p-4">Total</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Placed</th>
-                    <th className="p-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.055] font-sans text-[14px]">
-                  {filteredOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-white/40 font-sans text-xs">
-                        No orders recorded yet. Orders appear here once confirmed from customer conversations.
-                      </td>
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-white/[0.05] border-b border-white/[0.07] text-[11px] font-sans text-white/50 tracking-[0.11em] font-bold">
+                      <th className="p-4">Customer</th>
+                      <th className="p-4">Items</th>
+                      <th className="p-4">Phone</th>
+                      <th className="p-4">Address</th>
+                      <th className="p-4">Total</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Placed</th>
+                      <th className="p-4">Actions</th>
                     </tr>
-                  ) : (
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.055] font-sans text-[14px]">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-white/40 font-sans text-xs">
+                          No orders recorded yet. Orders appear here once confirmed from customer conversations.
+                        </td>
+                      </tr>
+                    ) : (
                     filteredOrders.map((order) => {
                       const statusClass = 
                         order.status === 'Delivered' ? 'status-success' :
@@ -169,8 +179,9 @@ export default function OrdersPage({ products = [] }: { products?: Product[] }) 
                       );
                     })
                   )}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

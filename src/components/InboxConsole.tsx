@@ -127,6 +127,7 @@ interface InboxConsoleProps {
   onUpdateConversation: (chatId: string, updates: Partial<Conversation>) => void;
   onUpdateConversationStatus: (chatId: string, status: 'Active' | 'AI Managed' | 'Closed') => Promise<void>;
   onDeleteConversation?: (chatId: string) => Promise<void>;
+  initialConversationId?: string;
 }
 
 export default function InboxConsole({
@@ -134,12 +135,13 @@ export default function InboxConsole({
   products,
   onUpdateConversation,
   onUpdateConversationStatus,
-  onDeleteConversation
+  onDeleteConversation,
+  initialConversationId
 }: InboxConsoleProps) {
   const storeCurrency = React.useMemo(() => getCatalogCurrency(products), [products]);
   const leftPane = useResizableWidth('remlin.inbox.listWidth', 360, 260, 480, 1);
   const rightPane = useResizableWidth('remlin.inbox.cartWidth', 300, 240, 380, -1);
-  const [selectedChatId, setSelectedChatId] = useState(conversations[0]?.id || '');
+  const [selectedChatId, setSelectedChatId] = useState(initialConversationId || conversations[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -174,6 +176,27 @@ export default function InboxConsole({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Set initial conversation from prop when provided
+  useEffect(() => {
+    if (initialConversationId && conversations.some(c => c.id === initialConversationId)) {
+      setSelectedChatId(initialConversationId);
+      setMobileView('chat');
+    }
+  }, [initialConversationId, conversations]);
+
+  // Listen for conversation open event from notifications
+  useEffect(() => {
+    const handleOpenConversation = (e: Event) => {
+      const conversationId = (e as CustomEvent).detail;
+      if (conversationId && conversations.some(c => c.id === conversationId)) {
+        setSelectedChatId(conversationId);
+        setMobileView('chat');
+      }
+    };
+    window.addEventListener('shopmate_open_conversation', handleOpenConversation);
+    return () => window.removeEventListener('shopmate_open_conversation', handleOpenConversation);
+  }, [conversations]);
 
   const getChatDisplayName = (chat: Conversation) => {
     if (!chat) return '';
@@ -240,17 +263,13 @@ export default function InboxConsole({
       setRecentOrders([]);
       return;
     }
-    listOrders()
-      .then((orders) => {
-        const conversationOrders = orders.filter((o) => o.conversationId === activeChat.id);
-        const active = conversationOrders.filter(
-          (o) => isActiveOrderLabel(o.status)
-        );
-        setOngoingOrders(active);
-        setRecentOrders(conversationOrders);
-      })
-      .catch((err) => console.error('Failed to load orders:', err));
-  }, [activeChat?.id]);
+    const conversationOrders = activeChat.orders || [];
+    const active = conversationOrders.filter(
+      (o) => isActiveOrderLabel(o.status)
+    );
+    setOngoingOrders(active);
+    setRecentOrders(conversationOrders);
+  }, [activeChat?.id, activeChat?.orders]);
 
   const handleCancelOrder = async (orderId: string) => {
     setCancellingOrderId(orderId);
@@ -313,17 +332,6 @@ export default function InboxConsole({
         discardDraftId || undefined
       );
       onUpdateConversation(activeChat.id, updated);
-      // Refresh ongoing orders in case the AI just created one
-      listOrders()
-        .then((orders) => {
-          const active = orders.filter(
-            (o) =>
-              isActiveOrderLabel(o.status) &&
-              o.conversationId === activeChat.id
-          );
-          setOngoingOrders(active);
-        })
-        .catch(() => {});
     } catch (err) {
       console.error(err);
     } finally {
@@ -388,17 +396,6 @@ export default function InboxConsole({
       setOrderPhone('');
       setOrderSuccess('Order created successfully.');
       setTimeout(() => setOrderSuccess(''), 3000);
-      // Refresh ongoing & recent orders
-      listOrders()
-        .then((orders) => {
-          const conversationOrders = orders.filter((o) => o.conversationId === activeChat.id);
-          const active = conversationOrders.filter(
-            (o) => isActiveOrderLabel(o.status)
-          );
-          setOngoingOrders(active);
-          setRecentOrders(conversationOrders);
-        })
-        .catch(() => {});
     } catch (err: any) {
       setOrderError(err.message || 'Failed to create order.');
     } finally {

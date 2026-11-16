@@ -7,6 +7,7 @@ export type Tab =
   | 'catalog'
   | 'persona'
   | 'orders'
+  | 'notifications'
   | 'analytics'
   | 'integrations'
   | 'settings'
@@ -59,6 +60,7 @@ export interface Conversation {
   orderConfirmed?: boolean;
   orderConfirmationRequested?: boolean;
   suggestedProducts?: string[];
+  orders?: ApiOrder[];
 }
 
 export interface Integration {

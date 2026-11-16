@@ -76,6 +76,21 @@ export function toPublicConversation(c: any) {
     pending: !!m.pending,
   }));
   const last = messages[messages.length - 1];
+  
+  const orders = (c.orders || []).map((o: any) => ({
+    id: o.id,
+    conversationId: o.conversationId,
+    items: o.items,
+    customerName: o.customerName,
+    customerPhone: o.customerPhone,
+    address: o.address,
+    status: o.status,
+    total: Number(o.total),
+    createdAt: o.createdAt,
+    trackingCode: o.trackingCode ?? null,
+    trackingUrl: o.trackingUrl ?? null,
+  }));
+  
   return {
     id: c.id,
     customerName: c.customerName || 'New Customer',
@@ -94,6 +109,7 @@ export function toPublicConversation(c: any) {
     detectedPhone: c.detectedPhone || undefined,
     orderConfirmed: !!c.orderConfirmed,
     orderConfirmationRequested: !!c.orderConfirmationRequested,
+    orders,
   };
 }
 

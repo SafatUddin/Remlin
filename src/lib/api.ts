@@ -351,11 +351,14 @@ export function approveDraftMessage(conversationId: string, messageId: string) {
 
 export interface ApiNotification {
   id: string;
-  type: 'message' | 'inventory';
+  type: 'message' | 'inventory' | 'order';
   title: string;
   body: string;
   time: string | null;
   platform: 'facebook' | 'instagram' | 'whatsapp' | 'websocket' | 'system';
+  orderId?: string;
+  conversationId?: string | null;
+  customerName?: string;
 }
 
 export function listNotifications() {

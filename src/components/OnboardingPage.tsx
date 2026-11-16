@@ -60,9 +60,15 @@ export default function OnboardingPage({
   onNavigate,
 }: OnboardingPageProps) {
   const [courier, setCourier] = useState<CourierStatus | null>(null);
+  const [courierChecked, setCourierChecked] = useState(false);
   useEffect(() => {
-    if (profileComplete) getCourier().then(setCourier).catch(() => {});
-  }, [profileComplete]);
+    if (profileComplete && !courierChecked) {
+      getCourier()
+        .then(setCourier)
+        .catch(() => {})
+        .finally(() => setCourierChecked(true));
+    }
+  }, [profileComplete, courierChecked]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(() => (window.location.hash.startsWith('#onboarding?') ? (/shopify/i.test(window.location.hash) ? 'products' : 'channel') : null));
 

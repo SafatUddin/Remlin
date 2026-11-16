@@ -47,12 +47,13 @@ import { useResizableWidth } from './lib/useResizableWidth';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import IntegrationsHub from './components/IntegrationsHub';
 import OrdersPage from './components/OrdersPage';
+import NotificationsPage from './components/NotificationsPage';
 import SettingsPage from './components/SettingsPage';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSettings from './components/AdminSettings';
 
 // Dashboard pages a logged-in merchant is returned to after a browser refresh.
-const RESTORABLE_TABS: Tab[] = ['onboarding', 'inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
+const RESTORABLE_TABS: Tab[] = ['onboarding', 'inbox', 'catalog', 'persona', 'orders', 'notifications', 'analytics', 'integrations', 'settings', 'support'];
 
 // ─────────────────────────────────────────────────────────────────────────
 // App is the single root component: it owns navigation, the auth session,
@@ -87,7 +88,7 @@ export default function App() {
   const initialHashRef = useRef(window.location.hash);
 
   const navigateTo = (tab: Tab, replace = false) => {
-    const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
+    const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'notifications', 'analytics', 'integrations', 'settings', 'support'];
     const effectiveTab: Tab =
       isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(tab) && tab !== 'settings'
         ? 'onboarding'
@@ -110,7 +111,7 @@ export default function App() {
     }
     const handlePopState = (e: PopStateEvent) => {
       const requested = (e.state?.tab as Tab) || 'landing';
-      const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'analytics', 'integrations', 'settings', 'support'];
+      const dashboard_tabs: Tab[] = ['inbox', 'catalog', 'persona', 'orders', 'notifications', 'analytics', 'integrations', 'settings', 'support'];
       const tab: Tab =
         isAuthenticatedRef.current && !profileCompleteRef.current && dashboard_tabs.includes(requested) && requested !== 'settings'
           ? 'onboarding'
@@ -247,6 +248,27 @@ export default function App() {
       window.removeEventListener('shopmate_profile_incomplete', handleProfileIncomplete);
     };
   }, []);
+
+  // State to track which conversation should be opened when navigating to inbox
+  const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+
+  // Listen for conversation open events from notifications
+  useEffect(() => {
+    const handleOpenConversation = (e: Event) => {
+      const conversationId = (e as CustomEvent).detail;
+      setPendingConversationId(conversationId);
+      navigateTo('inbox');
+    };
+    window.addEventListener('shopmate_open_conversation', handleOpenConversation);
+    return () => window.removeEventListener('shopmate_open_conversation', handleOpenConversation);
+  }, []);
+
+  // Clear pending conversation ID after it's been used
+  useEffect(() => {
+    if (pendingConversationId && activeTab === 'inbox') {
+      setPendingConversationId(null);
+    }
+  }, [pendingConversationId, activeTab]);
 
   const handleAuthSuccess = (auth: AuthResponse) => {
     clearLegacyTokenStorage();
@@ -552,6 +574,7 @@ export default function App() {
         onUpdateConversation={handleUpdateConversation}
         onUpdateConversationStatus={handleUpdateConversationStatus}
         onDeleteConversation={handleDeleteConversation}
+        initialConversationId={pendingConversationId || undefined}
       />
     );
   };
@@ -674,6 +697,8 @@ export default function App() {
         );
       case 'orders':
         return <OrdersPage products={products} />;
+      case 'notifications':
+        return <NotificationsPage />;
       case 'analytics':
         return <AnalyticsDashboard />;
       case 'integrations':

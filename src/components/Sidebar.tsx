@@ -11,8 +11,8 @@ import {
   ChevronRight,
   ClipboardList,
   Bot,
-  LayoutDashboard
-
+  LayoutDashboard,
+  Bell
 } from 'lucide-react';
 import { Tab } from '../types';
 
@@ -61,6 +61,7 @@ export default function Sidebar({
     { id: 'catalog', label: 'Product catalog', icon: Package },
     { id: 'persona', label: 'AI Persona', icon: Bot },
     { id: 'orders', label: 'Orders', icon: ClipboardList },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'integrations', label: 'Integrations', icon: Grid },
   ];

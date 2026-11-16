@@ -64,13 +64,13 @@ export function createConversationsRouter(): express.Router {
     });
   });
 
-  // Derived, real-time notifications: unread/complaint conversations + low-stock products.
+  // Derived, real-time notifications: unread/complaint conversations + low-stock products + new orders.
   // Computed on the fly rather than stored, since these all resolve naturally elsewhere
   // (opening a conversation marks it read; restocking a product clears its low-stock alert).
   router.get('/api/notifications', requireAuth, requireProfileComplete, async (req: AuthedRequest, res) => {
     try {
       const storeId = req.auth!.storeId;
-      const [conversations, lowStockProducts] = await Promise.all([
+      const [conversations, lowStockProducts, recentOrders] = await Promise.all([
         prisma.conversation.findMany({
           where: { storeId },
           include: { messages: { select: inboxMessageSelect, orderBy: { createdAt: 'desc' }, take: 1 } },
@@ -78,6 +78,11 @@ export function createConversationsRouter(): express.Router {
           take: 20,
         }),
         prisma.product.findMany({ where: { storeId, inventory: { lt: 10 } }, orderBy: { inventory: 'asc' } }),
+        prisma.order.findMany({
+          where: { storeId },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
       ]);
 
       const notifications: any[] = [];
@@ -107,6 +112,22 @@ export function createConversationsRouter(): express.Router {
         });
       }
 
+      for (const order of recentOrders) {
+        const items = (order.items as any[]) || [];
+        const itemCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        notifications.push({
+          id: `order-${order.id}`,
+          type: 'order',
+          title: 'New Order Placed',
+          body: `placed an order with ${itemCount} item${itemCount === 1 ? '' : 's'}`,
+          time: order.createdAt,
+          platform: 'system',
+          orderId: order.id,
+          conversationId: order.conversationId,
+          customerName: order.customerName,
+        });
+      }
+
       notifications.sort((a, b) => {
         if (!a.time) return 1;
         if (!b.time) return -1;
@@ -123,19 +144,43 @@ export function createConversationsRouter(): express.Router {
   // List this store's conversations across all channels
   router.get('/api/conversations', requireAuth, requireProfileComplete, async (req: AuthedRequest, res) => {
     try {
-      const conversations = await prisma.conversation.findMany({
-        where: { storeId: req.auth!.storeId },
-        include: {
-          // Keep the inbox readable while the additive voice-message migration is
-          // waiting for deployment on a shared database.
-          messages: {
-            select: inboxMessageSelect,
-            orderBy: { createdAt: 'asc' },
+      const storeId = req.auth!.storeId;
+      const [conversations, orders] = await Promise.all([
+        prisma.conversation.findMany({
+          where: { storeId },
+          include: {
+            // Keep the inbox readable while the additive voice-message migration is
+            // waiting for deployment on a shared database.
+            messages: {
+              select: inboxMessageSelect,
+              orderBy: { createdAt: 'asc' },
+            },
           },
-        },
-        orderBy: { lastMessageAt: 'desc' },
-      });
-      res.json(conversations.map(toPublicConversation));
+          orderBy: { lastMessageAt: 'desc' },
+        }),
+        prisma.order.findMany({
+          where: { storeId },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
+      // Merge orders into conversations by conversationId
+      const ordersByConversation = new Map<string, any[]>();
+      for (const order of orders) {
+        if (order.conversationId) {
+          if (!ordersByConversation.has(order.conversationId)) {
+            ordersByConversation.set(order.conversationId, []);
+          }
+          ordersByConversation.get(order.conversationId)!.push(order);
+        }
+      }
+
+      const conversationsWithOrders = conversations.map(conv => ({
+        ...conv,
+        orders: ordersByConversation.get(conv.id) || [],
+      }));
+
+      res.json(conversationsWithOrders.map(toPublicConversation));
     } catch (err: any) {
       console.error('List conversations error:', err);
       res.status(500).json({ error: 'Failed to load conversations' });
