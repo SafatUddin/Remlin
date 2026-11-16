@@ -17,23 +17,23 @@ const fmtDur = (s: number | null | undefined) => {
 
 function Stat({ icon: Icon, label, value, unit, sub, tone }: { icon: typeof Activity; label: string; value: React.ReactNode; unit?: string; sub?: React.ReactNode; tone?: 'blue' }) {
   return (
-    <div className="zone-b-grey3 p-5 flex flex-col gap-3 min-h-[118px]">
+    <div className="zone-b-grey3 p-4 sm:p-5 flex flex-col gap-2.5 sm:gap-3 min-h-[108px] sm:min-h-[118px]">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-[0.12em] font-bold text-white/50">{label}</span>
-        <Icon className="h-4 w-4" style={{ color: tone === 'blue' ? COLORS.blue : 'rgba(255,255,255,0.45)' }} />
+        <span className="text-[10.5px] sm:text-[11px] uppercase tracking-[0.12em] font-bold text-white/50">{label}</span>
+        <Icon className="h-4 w-4 shrink-0" style={{ color: tone === 'blue' ? COLORS.blue : 'rgba(255,255,255,0.45)' }} />
       </div>
       <div className="flex items-end gap-1.5">
-        <strong className="text-[30px] leading-none font-bold text-white">{value}</strong>
+        <strong className="text-[24px] sm:text-[30px] leading-none font-bold text-white">{value}</strong>
         {unit && <span className="text-sm text-white/45 mb-0.5">{unit}</span>}
       </div>
-      {sub && <div className="text-xs text-white/40 mt-auto">{sub}</div>}
+      {sub && <div className="text-[11px] sm:text-xs text-white/40 mt-auto">{sub}</div>}
     </div>
   );
 }
 
 function Panel({ title, icon: Icon, subtitle, children, className = '' }: { title: string; icon?: typeof Activity; subtitle?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`zone-b-grey2 min-w-0 p-6 flex flex-col ${className}`}>
+    <section className={`zone-b-grey2 min-w-0 p-4 sm:p-6 flex flex-col ${className}`}>
       <h3 className="text-[15px] font-bold text-white flex items-center gap-2">{Icon && <Icon className="h-4 w-4 text-white/60" />}{title}</h3>
       {subtitle && <p className="mt-1.5 text-xs text-white/40 font-mono">{subtitle}</p>}
       {children}
@@ -169,12 +169,12 @@ export default function AnalyticsDashboard() {
   return (
     <div className="w-full flex-grow flex flex-col text-left">
       <DashboardHeader searchPlaceholder="Search analytics…" />
-      <main className="w-full flex-grow flex flex-col gap-6 px-6 md:px-10 py-8">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-5">
+      <main className="w-full flex-grow flex flex-col gap-5 sm:gap-6 px-3.5 sm:px-6 md:px-10 py-5 sm:py-8">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-5">
           <div className="space-y-1.5 max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.18em] text-white/40 font-bold">Analytics</p>
-            <h1 className="text-[32px] font-bold text-white tracking-tight">Analytics</h1>
-            <p className="text-sm text-white/55">Messages handled, how much the AI finishes alone, and how fast the first reply comes — plus handoff volume and reversions.</p>
+            <h1 className="text-2xl sm:text-[32px] font-bold text-white tracking-tight">Analytics</h1>
+            <p className="text-xs sm:text-sm text-white/55">Messages handled, how much the AI finishes alone, and how fast the first reply comes — plus handoff volume and reversions.</p>
           </div>
           <RangeSelect value={range} onChange={setRange} />
         </header>
@@ -184,7 +184,7 @@ export default function AnalyticsDashboard() {
         ) : (
           <>
             <SecHead icon={MessageSquare} title="Conversations" note={`from your own message history · last ${rangeLabel} · Asia/Dhaka`} />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               <Stat icon={Inbox} label="Messages handled" value={loading ? '—' : (k?.customerMessages ?? 0) + (k?.aiReplies ?? 0) + (k?.humanReplies ?? 0)} sub={<span className="font-mono">{k?.customerMessages ?? 0} in · {(k?.aiReplies ?? 0) + (k?.humanReplies ?? 0)} out</span>} />
               <Stat icon={Bot} tone="blue" label="AI replies" value={v(k?.aiReplies)} />
               <Stat icon={User} label="Human replies" value={v(k?.humanReplies)} />
@@ -224,7 +224,7 @@ export default function AnalyticsDashboard() {
             </div>
 
             <SecHead icon={Activity} title="Handoffs" note="when a chat moved between the AI and a person" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               <Stat icon={TrendingUp} label="Handoffs to humans" value={v(data?.handoffs.requestsToHumans)} />
               <Stat icon={Undo2} label="Auto-reversions" value={v(data?.handoffs.autoReturned)} />
               <Stat icon={Activity} label="Total events" value={v(data?.handoffs.totalEvents)} />
@@ -232,7 +232,7 @@ export default function AnalyticsDashboard() {
             </div>
 
             <SecHead icon={Zap} title="Response & SLA" note={`how fast humans pick up · first-response target 15m · last ${rangeLabel}`} />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               <Stat icon={Gauge} label="Avg first response" value={loading ? '—' : fmtDur(k?.averageResponseTimeSeconds) ?? '0'} />
               <Stat icon={AlertTriangle} label="SLA breach rate" value={v(k?.slaBreachRate)} unit="%" />
               <Stat icon={User} label="Waiting now" value={v(k?.waitingConversations)} />

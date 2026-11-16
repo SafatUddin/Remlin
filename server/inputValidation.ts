@@ -261,7 +261,7 @@ export function validateOnboardingInput(
     else profile.hotline = hotline;
     if (!profile.sell) fieldErrors.sell = 'Tell us what you sell.';
     if (!profile.address) fieldErrors.address = 'Address is required.';
-    for (const k of ['hours', 'inC', 'inF', 'inS', 'outC', 'outF', 'outS', 'extra', 'pay', 'returns', 'first'] as const) {
+    for (const k of ['hours', 'inC', 'inF', 'inS', 'outC', 'outF', 'outS', 'extra', 'pay', 'returns'] as const) {
       if (!profile[k]) fieldErrors[k] = 'This field is required.';
     }
     if (!profile.addr) fieldErrors.addr = 'Choose how to address customers.';

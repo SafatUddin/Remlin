@@ -27,6 +27,9 @@ import {
   updateConversationStatus,
   deleteConversation,
   listChannels,
+  listOrders,
+  listNotifications,
+  getCourier,
   exchangeGoogleCode,
   AuthResponse,
   OnboardingResponse,
@@ -40,6 +43,7 @@ import LoginPage from './components/LoginPage';
 import SignupPage from './components/SignupPage';
 import OnboardingPage from './components/OnboardingPage';
 import Sidebar from './components/Sidebar';
+import DashboardHeader from './components/DashboardHeader';
 import InboxConsole from './components/InboxConsole';
 import ProductCatalog from './components/ProductCatalog';
 import AgentPersona from './components/AgentPersona';
@@ -252,23 +256,39 @@ export default function App() {
   // State to track which conversation should be opened when navigating to inbox
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
 
-  // Listen for conversation open events from notifications
+  // Latest conversations, readable from event handlers registered before the state is declared
+  const conversationsRef = useRef<Conversation[]>([]);
+
+  // Listen for conversation open events from notifications or orders table
   useEffect(() => {
     const handleOpenConversation = (e: Event) => {
-      const conversationId = (e as CustomEvent).detail;
-      setPendingConversationId(conversationId);
+      const detail = (e as CustomEvent).detail;
+      const list = conversationsRef.current;
+      let targetId: string | null = null;
+      if (typeof detail === 'string') {
+        targetId = detail;
+      } else if (detail && typeof detail === 'object') {
+        if (detail.conversationId) {
+          targetId = detail.conversationId;
+        } else if (detail.orderId) {
+          const byOrder = list.find((c) => c.orders?.some((o) => o.id === detail.orderId));
+          if (byOrder) targetId = byOrder.id;
+        }
+        if (!targetId && detail.customerName) {
+          const byName = list.find(
+            (c) => c.customerName.toLowerCase() === String(detail.customerName).toLowerCase()
+          );
+          if (byName) targetId = byName.id;
+        }
+      }
+      if (targetId) {
+        setPendingConversationId(targetId);
+      }
       navigateTo('inbox');
     };
     window.addEventListener('shopmate_open_conversation', handleOpenConversation);
     return () => window.removeEventListener('shopmate_open_conversation', handleOpenConversation);
   }, []);
-
-  // Clear pending conversation ID after it's been used
-  useEffect(() => {
-    if (pendingConversationId && activeTab === 'inbox') {
-      setPendingConversationId(null);
-    }
-  }, [pendingConversationId, activeTab]);
 
   const handleAuthSuccess = (auth: AuthResponse) => {
     clearLegacyTokenStorage();
@@ -346,6 +366,7 @@ export default function App() {
   const [integrations, setIntegrations] = useState<Integration[]>(INITIAL_INTEGRATIONS);
   const [persona, setPersona] = useState<AIPersona>(DEFAULT_AI_PERSONA);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  conversationsRef.current = conversations;
   // Which channel types actually have a connected Channel row right now — the Inbox
   // only shows chat for channels a merchant has genuinely connected, not just any
   // conversation that happens to exist in the DB (e.g. a channel disconnected after
@@ -383,6 +404,9 @@ export default function App() {
       }))
       .catch((err) => console.error('Failed to load persona:', err));
     listConversations().then(setConversations).catch((err) => console.error('Failed to load conversations:', err));
+    listOrders().catch((err) => console.error('Failed to preload orders:', err));
+    listNotifications().catch((err) => console.error('Failed to preload notifications:', err));
+    getCourier().catch(() => {});
     refreshChannels();
   }, [merchant, profileComplete]);
 
@@ -392,6 +416,7 @@ export default function App() {
     if (!merchant || !profileComplete) return;
     const interval = setInterval(() => {
       listConversations().then(setConversations).catch((err) => console.error('Failed to refresh conversations:', err));
+      listOrders().catch(() => {});
       refreshChannels();
     }, 5000);
     return () => clearInterval(interval);
@@ -553,17 +578,20 @@ export default function App() {
   const renderInbox = () => {
     if (connectedPlatforms.size === 0 && conversations.length === 0) {
       return (
-        <div className="w-full flex-grow flex flex-col items-center justify-center text-center px-6 h-full overflow-x-hidden">
-          <h3 className="font-sans font-bold text-sm text-white uppercase tracking-wider">No Channels Connected</h3>
-          <p className="font-sans text-xs text-white/40 max-w-xs mt-2 leading-relaxed">
-            Connect a channel like Facebook Messenger to start receiving and replying to real customer conversations here.
-          </p>
-          <button
-            onClick={() => handleNavigate('integrations')}
-            className="mt-5 bg-white hover:bg-white/90 text-black font-sans font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded transition-all cursor-pointer"
-          >
-            Go to Integrations
-          </button>
+        <div className="w-full flex-grow flex flex-col h-full overflow-x-hidden">
+          <DashboardHeader searchPlaceholder="Search conversations…" />
+          <div className="w-full flex-grow flex flex-col items-center justify-center text-center px-6">
+            <h3 className="font-sans font-bold text-sm text-white uppercase tracking-wider">No Channels Connected</h3>
+            <p className="font-sans text-xs text-white/40 max-w-xs mt-2 leading-relaxed">
+              Connect a channel like Facebook Messenger to start receiving and replying to real customer conversations here.
+            </p>
+            <button
+              onClick={() => handleNavigate('integrations')}
+              className="mt-5 bg-white hover:bg-white/90 text-black font-sans font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded transition-all cursor-pointer"
+            >
+              Go to Integrations
+            </button>
+          </div>
         </div>
       );
     }
@@ -575,6 +603,7 @@ export default function App() {
         onUpdateConversationStatus={handleUpdateConversationStatus}
         onDeleteConversation={handleDeleteConversation}
         initialConversationId={pendingConversationId || undefined}
+        onConversationOpened={() => setPendingConversationId(null)}
       />
     );
   };
@@ -764,6 +793,7 @@ export default function App() {
               onNavigate={handleNavigate} 
               onLogout={handleLogout} 
               isOpen={isSidebarOpen}
+              onOpen={() => setIsSidebarOpen(true)}
               onClose={() => setIsSidebarOpen(false)}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
@@ -775,8 +805,8 @@ export default function App() {
               isResizing={sidebarResize.dragging}
             />
 
-            {/* Core Content Area — h-screen, inner page content scrolls without visible scrollbar */}
-            <main ref={mainRef} className={`pl-0 md:pl-[var(--sidebar-w)] h-screen flex flex-col flex-1 min-w-0 ${activeTab === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar ${sidebarResize.dragging ? '' : 'transition-all duration-300'} relative z-10`}>
+            {/* Core Content Area — h-[100dvh], inner page content scrolls without visible scrollbar */}
+            <main ref={mainRef} className={`pl-[60px] sm:pl-[68px] md:pl-[var(--sidebar-w)] h-screen h-[100dvh] flex flex-col flex-1 min-w-0 ${activeTab === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar ${sidebarResize.dragging ? '' : 'transition-all duration-300'} relative z-10`}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}

@@ -92,20 +92,20 @@ export default function AdminDashboard() {
         onSearchChange={setSearchTerm}
       />
 
-      <div className="w-full flex-grow p-6 md:p-8 overflow-y-auto space-y-6">
+      <div className="w-full flex-grow p-3.5 sm:p-6 md:p-8 overflow-y-auto space-y-5 sm:space-y-6">
         {/* Header with filters and actions */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="font-sans font-bold text-[24px] text-white flex items-center gap-3 tracking-tight">
-              <Shield className="text-[#00a8e8] h-6 w-6" />
+            <h1 className="font-sans font-bold text-xl sm:text-[24px] text-white flex items-center gap-3 tracking-tight">
+              <Shield className="text-[#00a8e8] h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
               Admin Dashboard
             </h1>
-            <p className="text-[14px] text-white/60">Platform-wide merchant analytics and performance</p>
+            <p className="text-xs sm:text-[14px] text-white/60">Platform-wide merchant analytics and performance</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Time filter buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 onClick={() => setTimeFilter('all')}
                 className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${

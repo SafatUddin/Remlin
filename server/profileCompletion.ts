@@ -108,14 +108,16 @@ export async function requireProfileComplete(
   }
 
   try {
-    const merchant = await prisma.merchant.findUnique({
-      where: { id: req.auth!.merchantId },
-      select: { name: true, email: true, phone: true },
-    });
-    const store = await prisma.store.findUnique({
-      where: { merchantId: req.auth!.merchantId },
-      select: { name: true, businessProfile: true },
-    });
+    const [merchant, store] = await Promise.all([
+      prisma.merchant.findUnique({
+        where: { id: req.auth!.merchantId },
+        select: { name: true, email: true, phone: true },
+      }),
+      prisma.store.findUnique({
+        where: { merchantId: req.auth!.merchantId },
+        select: { name: true, businessProfile: true },
+      }),
+    ]);
 
     if (!merchant || !store) {
       res.status(404).json({ error: 'Account not found' });

@@ -128,6 +128,7 @@ interface InboxConsoleProps {
   onUpdateConversationStatus: (chatId: string, status: 'Active' | 'AI Managed' | 'Closed') => Promise<void>;
   onDeleteConversation?: (chatId: string) => Promise<void>;
   initialConversationId?: string;
+  onConversationOpened?: () => void;
 }
 
 export default function InboxConsole({
@@ -136,7 +137,8 @@ export default function InboxConsole({
   onUpdateConversation,
   onUpdateConversationStatus,
   onDeleteConversation,
-  initialConversationId
+  initialConversationId,
+  onConversationOpened
 }: InboxConsoleProps) {
   const storeCurrency = React.useMemo(() => getCatalogCurrency(products), [products]);
   const leftPane = useResizableWidth('remlin.inbox.listWidth', 360, 260, 480, 1);
@@ -151,7 +153,7 @@ export default function InboxConsole({
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [orderSuccess, setOrderSuccess] = useState('');
-  const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>('list');
+  const [mobileView, setMobileView] = useState<'list' | 'chat' | 'info'>(initialConversationId ? 'chat' : 'list');
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [ongoingOrders, setOngoingOrders] = useState<ApiOrder[]>([]);
@@ -182,13 +184,23 @@ export default function InboxConsole({
     if (initialConversationId && conversations.some(c => c.id === initialConversationId)) {
       setSelectedChatId(initialConversationId);
       setMobileView('chat');
+      onConversationOpened?.();
     }
   }, [initialConversationId, conversations]);
 
-  // Listen for conversation open event from notifications
+  // Keep selectedChatId valid when conversations first load or when the selected chat is removed
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    if (!selectedChatId || !conversations.some(c => c.id === selectedChatId)) {
+      setSelectedChatId(conversations[0].id);
+    }
+  }, [conversations, selectedChatId]);
+
+  // Listen for conversation open event from notifications or orders table
   useEffect(() => {
     const handleOpenConversation = (e: Event) => {
-      const conversationId = (e as CustomEvent).detail;
+      const detail = (e as CustomEvent).detail;
+      const conversationId = typeof detail === 'string' ? detail : detail?.conversationId;
       if (conversationId && conversations.some(c => c.id === conversationId)) {
         setSelectedChatId(conversationId);
         setMobileView('chat');
@@ -250,11 +262,13 @@ export default function InboxConsole({
     if (userIsAtBottom.current) scrollToBottom();
   }, [activeChat?.messages, isTyping]);
 
-  // When switching conversations, always jump to the bottom and reset the flag.
+  // When switching conversations or opening the chat view on mobile, jump to the bottom.
   useEffect(() => {
-    userIsAtBottom.current = true;
-    scrollToBottom();
-  }, [activeChat?.id]);
+    if (mobileView === 'chat' || window.innerWidth >= 1024) {
+      userIsAtBottom.current = true;
+      scrollToBottom();
+    }
+  }, [activeChat?.id, mobileView]);
 
   // Load ongoing & all recent orders for the active conversation
   useEffect(() => {
@@ -424,6 +438,7 @@ export default function InboxConsole({
   const handleDeleteChat = async (chatId: string) => {
     setIsMenuOpen(false);
     setDeletedChatIds((prev) => [...prev, chatId]);
+    setMobileView('list');
     if (onDeleteConversation) {
       await onDeleteConversation(chatId);
     }
@@ -572,9 +587,9 @@ export default function InboxConsole({
         onSearchChange={setSearchQuery}
       />
 
-      <div className="w-full flex-grow flex flex-col min-h-0 space-y-3 p-4 md:p-5 overflow-hidden">
+      <div className="w-full flex-grow flex flex-col min-h-0 space-y-2.5 sm:space-y-3 p-2.5 sm:p-4 md:p-5 overflow-hidden">
         {/* Filter Tabs Row matching Picture 2 Apple Glass Design */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar shrink-0 flex-nowrap">
+        <div className={`${mobileView === 'list' ? 'flex' : 'hidden lg:flex'} items-center gap-2 overflow-x-auto pb-1 no-scrollbar shrink-0 flex-nowrap`}>
           {FILTERS.map((f) => {
             const isActive = activeFilter === f;
             const count = getFilterCount(f);
@@ -584,7 +599,7 @@ export default function InboxConsole({
               <button
                 key={f}
                 onClick={() => setActiveFilter(f)}
-                className={`text-[12px] font-sans font-medium px-4 py-1.5 rounded-full border shrink-0 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap backdrop-blur-md ${
+                className={`text-[12px] font-sans font-medium px-3.5 sm:px-4 py-1.5 rounded-full border shrink-0 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap backdrop-blur-md ${
                   isActive 
                     ? 'bg-gradient-to-b from-white/20 to-white/10 border-white/35 text-white font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_4px_12px_rgba(0,0,0,0.4)]' 
                     : 'bg-white/[0.04] border-white/[0.08] text-white/60 hover:text-white hover:bg-white/10 hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
@@ -607,13 +622,13 @@ export default function InboxConsole({
 
         {/* Unified Apple Glass Workspace Container */}
         <div
-          className="flex-grow min-h-0 flex overflow-hidden w-full rounded-2xl border border-white/15 bg-[#0a0b10] shadow-2xl divide-x divide-white/[0.08]"
+          className="flex-grow min-h-0 flex overflow-hidden w-full rounded-2xl border border-white/15 bg-[#0a0b10] shadow-2xl lg:divide-x lg:divide-white/[0.08]"
           style={{ '--inbox-left': `${leftPane.width}px`, '--inbox-right': `${rightPane.width}px` } as React.CSSProperties}
         >
 
           {/* Pane 1: Left Conversation List */}
-          <aside className="bg-[#101117] flex flex-col h-full lg:w-[var(--inbox-left)] min-w-[260px] w-full overflow-hidden shrink-0">
-            <header className="h-16 px-4 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-white/[0.01]">
+          <aside className={`bg-[#101117] flex-col h-full lg:w-[var(--inbox-left)] min-w-0 lg:min-w-[260px] w-full overflow-hidden shrink-0 ${mobileView === 'list' ? 'flex' : 'hidden lg:flex'}`}>
+            <header className="h-14 sm:h-16 px-4 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-white/[0.01]">
               <h3 className="font-sans font-bold text-[15px] text-white">
                 Conversations
               </h3>
@@ -622,12 +637,17 @@ export default function InboxConsole({
               </span>
             </header>
 
-            <div className="flex-grow min-h-0 overflow-y-auto p-3 space-y-2 no-scrollbar">
-              {filteredChats.map((chat) => {
+            <div className="flex-grow min-h-0 overflow-y-auto p-2.5 sm:p-3 space-y-2 no-scrollbar">
+              {filteredChats.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                  <p className="font-sans text-xs text-white/45">No conversations match this filter.</p>
+                </div>
+              ) : filteredChats.map((chat) => {
                 const isSelected = chat.id === selectedChatId;
                 return (
                   <button
                     key={chat.id}
+                    type="button"
                     onClick={() => {
                       setSelectedChatId(chat.id);
                       if (chat.unread) {
@@ -635,10 +655,10 @@ export default function InboxConsole({
                       }
                       setMobileView('chat');
                     }}
-                    className={`w-full text-left p-3.5 flex gap-3 items-start transition-all cursor-pointer rounded-2xl border ${
+                    className={`w-full text-left p-3 sm:p-3.5 flex gap-3 items-start transition-all cursor-pointer rounded-2xl border ${
                       isSelected 
                         ? 'bg-gradient-to-b from-white/[0.14] via-white/[0.06] to-white/[0.02] border-white/30 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_6px_20px_rgba(0,0,0,0.5)]' 
-                        : 'bg-white/[0.02] border-white/[0.08] hover:bg-white/[0.06] hover:border-white/15'
+                        : 'bg-white/[0.02] border-white/[0.08] hover:bg-white/[0.06] hover:border-white/15 active:bg-white/[0.08]'
                     }`}
                   >
                     {/* Avatar with channel badge */}
@@ -660,7 +680,7 @@ export default function InboxConsole({
                         {chat.lastMessage}
                       </p>
                       
-                      <div className="flex items-center gap-1.5 pt-1">
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
                         <span className={`inline-block font-sans text-[10.5px] px-2.5 py-0.5 rounded-full font-semibold border ${
                           chat.status === 'AI Managed' 
                             ? 'bg-white/10 border-white/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]' 
@@ -671,17 +691,24 @@ export default function InboxConsole({
                         {chat.isComplaint && (
                           <span className="inline-flex items-center gap-1 font-sans text-[10.5px] px-2 py-0.5 rounded-full font-semibold status-danger border border-red-400/30">
                             Complaint
-                            <button
-                              type="button"
+                            <span
+                              role="button"
+                              tabIndex={0}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleResolveComplaint(chat.id);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  handleResolveComplaint(chat.id);
+                                }
                               }}
                               className="ml-1 hover:text-white text-red-300 font-bold cursor-pointer"
                               title="Resolve complaint"
                             >
                               ✕
-                            </button>
+                            </span>
                           </span>
                         )}
                       </div>
@@ -698,47 +725,57 @@ export default function InboxConsole({
           />
 
           {/* Pane 2: Middle Message Thread */}
-          <main className={`bg-[#07080b] flex flex-col h-full min-w-[360px] flex-1 overflow-hidden relative ${mobileView === 'chat' ? 'flex' : 'hidden lg:flex'}`}>
-            <header className="h-16 px-4 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.01] shrink-0">
-              <div className="flex items-center gap-3">
+          <main className={`bg-[#07080b] flex-col h-full min-w-0 lg:min-w-[360px] w-full flex-1 overflow-hidden relative ${mobileView === 'chat' ? 'flex' : 'hidden lg:flex'}`}>
+            <header className="h-14 sm:h-16 px-3 sm:px-4 border-b border-white/[0.08] flex items-center justify-between gap-2 bg-white/[0.01] shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                 <button 
                   type="button"
                   onClick={() => setMobileView('list')}
-                  className="lg:hidden p-1.5 text-white/60 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer shrink-0"
+                  aria-label="Back to conversations"
+                  className="lg:hidden p-2 -ml-1 text-white/80 hover:text-white rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 cursor-pointer shrink-0 transition-colors"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
 
-                <ChatAvatar name={activeChat ? getChatDisplayName(activeChat) : ''} avatarUrl={activeChat?.avatarUrl} sizeClass="w-10 h-10" />
-                <div>
-                  <h4 className="font-sans text-[15px] font-bold text-white leading-tight">{activeChat ? getChatDisplayName(activeChat) : ''}</h4>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="w-2 h-2 rounded-full bg-[#3ddc84] shadow-[0_0_8px_rgba(61,220,132,0.9)] animate-pulse-dot" />
-                    <span className="font-sans text-[11.5px] text-white/50">
+                <ChatAvatar name={activeChat ? getChatDisplayName(activeChat) : ''} avatarUrl={activeChat?.avatarUrl} sizeClass="w-9 h-9 sm:w-10 sm:h-10" />
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-sans text-[14px] sm:text-[15px] font-bold text-white leading-tight truncate">{activeChat ? getChatDisplayName(activeChat) : ''}</h4>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
+                    <span className="w-2 h-2 rounded-full bg-[#3ddc84] shadow-[0_0_8px_rgba(61,220,132,0.9)] animate-pulse-dot shrink-0" />
+                    <span className="font-sans text-[11px] sm:text-[11.5px] text-white/50 truncate">
                       Active via {activeChat?.platform}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {activeChat?.isComplaint && (
                   <button
                     type="button"
                     onClick={() => handleResolveComplaint(activeChat.id)}
-                    className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl font-sans text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    className="px-2.5 sm:px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl font-sans text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                     title="Mark complaint as resolved"
                   >
-                    <CheckCircle className="h-4 w-4" />
-                    Resolve Complaint
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">Resolve Complaint</span>
+                    <span className="sm:hidden">Resolve</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setMobileView('info')}
-                  className="lg:hidden p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                  aria-label="View cart and orders"
+                  title="Cart & Orders"
+                  className="lg:hidden relative p-2 text-white/75 hover:text-white hover:bg-white/10 rounded-xl border border-white/10 bg-white/[0.04] transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  <FileText className="h-5 w-5" />
+                  <FileText className="h-4.5 w-4.5" />
+                  <span className="text-[11px] font-sans font-semibold hidden xs:inline">Cart</span>
+                  {((activeChat?.cart?.length || 0) + ongoingOrders.length) > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-[#2176ff] text-white text-[10px] font-bold leading-tight">
+                      {(activeChat?.cart?.length || 0) + ongoingOrders.length}
+                    </span>
+                  )}
                 </button>
 
                 {/* 3-dot (horizontal) options menu button */}
@@ -799,20 +836,20 @@ export default function InboxConsole({
             </header>
 
             {/* Message Thread Area */}
-            <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-grow min-h-0 overflow-y-auto p-5 space-y-4 no-scrollbar">
+            <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-grow min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 no-scrollbar">
               {activeChat?.isComplaint && (
-                <div className="status-danger rounded-2xl p-3.5 flex items-center justify-between gap-3 text-left">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="status-danger rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 text-left">
+                  <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
                     <ShieldAlert className="h-5 w-5 text-[#ff9d92] mt-0.5 shrink-0" />
                     <div>
                       <p className="font-sans text-xs font-bold uppercase tracking-wider">Complaint isolation override</p>
-                      <p className="text-[13px] text-white/80 leading-normal mt-0.5">Customer requested human support. Review conversation history below.</p>
+                      <p className="text-[12.5px] sm:text-[13px] text-white/80 leading-normal mt-0.5">Customer requested human support. Review conversation history below.</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleResolveComplaint(activeChat.id)}
-                    className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl font-sans text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl font-sans text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm self-end sm:self-auto"
                     title="Mark complaint as resolved"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -835,9 +872,9 @@ export default function InboxConsole({
                   <React.Fragment key={m.id}>
                     {/* Date Separator (like Messenger) */}
                     {showDateSeparator && (
-                      <div className="flex items-center justify-center py-2">
-                        <div className="bg-white/[0.08] border border-white/15 rounded-full px-4 py-1.5 backdrop-blur-md">
-                          <span className="font-sans text-[11px] font-semibold text-white/70">
+                      <div className="flex items-center justify-center py-1.5 sm:py-2">
+                        <div className="bg-white/[0.08] border border-white/15 rounded-full px-3.5 sm:px-4 py-1 sm:py-1.5 backdrop-blur-md">
+                          <span className="font-sans text-[10.5px] sm:text-[11px] font-semibold text-white/70">
                             {formatDateSeparator(m.time)}
                           </span>
                         </div>
@@ -846,16 +883,16 @@ export default function InboxConsole({
 
                     <div className={`flex w-full ${isCustomer ? 'justify-start' : 'justify-end'}`}>
                       {isPendingDraft ? (
-                        <div className="zone-b-grey3 p-4 rounded-2xl max-w-[72%] text-left space-y-3 shadow-xl border border-blue-400/40">
-                          <div className="flex items-center justify-between">
+                        <div className="zone-b-grey3 p-3.5 sm:p-4 rounded-2xl max-w-[90%] sm:max-w-[72%] text-left space-y-3 shadow-xl border border-blue-400/40">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="font-sans text-[11px] font-bold text-[#a9c6ff] tracking-wider flex items-center gap-1.5">
                               ✦ AI draft reply
                             </span>
                             <span className="font-sans text-[10.5px] text-white/50">{formatMessageTime(m.time)}</span>
                           </div>
-                          <p className="text-[13.5px] text-white leading-relaxed">{m.text.replace(/<[^>]+>/g, '').trim()}</p>
+                          <p className="text-[13px] sm:text-[13.5px] text-white leading-relaxed break-words">{m.text.replace(/<[^>]+>/g, '').trim()}</p>
                           {m.imageUrl && (
-                            <img src={m.imageUrl} alt="" className="rounded-xl max-w-[220px] max-h-[220px] object-cover border border-white/10" />
+                            <img src={m.imageUrl} alt="" className="rounded-xl max-w-full sm:max-w-[220px] max-h-[220px] object-cover border border-white/10" />
                           )}
 
                           <div className="flex items-center gap-2 pt-2 border-t border-white/[0.07]">
@@ -879,8 +916,8 @@ export default function InboxConsole({
                         </div>
                       ) : (
                         /* Message Bubbles matching Picture 1 */
-                        <div className={`flex flex-col ${isCustomer ? 'items-start max-w-[62%]' : 'items-end max-w-[72%]'}`}>
-                          <div className={`p-4 font-sans text-[13.5px] leading-relaxed transition-all ${
+                        <div className={`flex flex-col ${isCustomer ? 'items-start max-w-[85%] sm:max-w-[62%]' : 'items-end max-w-[85%] sm:max-w-[72%]'}`}>
+                          <div className={`p-3 sm:p-4 font-sans text-[13px] sm:text-[13.5px] leading-relaxed break-words transition-all ${
                             isCustomer
                               ? 'bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent border border-white/15 text-white rounded-[16px] rounded-bl-[4px] shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]'
                               : 'bg-gradient-to-b from-white/[0.12] via-[#1a1b22] to-[#121318] border border-white/20 text-white/95 rounded-[16px] rounded-br-[4px] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_16px_rgba(0,0,0,0.4)]'
@@ -909,7 +946,7 @@ export default function InboxConsole({
                             {m.imageUrl && (
                               <ChatImage
                                 src={m.imageUrl}
-                                className={`${isPhotoPlaceholder(m.text) ? '' : 'mt-2 '}rounded-xl max-w-[260px] max-h-[260px] object-cover border border-white/10`}
+                                className={`${isPhotoPlaceholder(m.text) ? '' : 'mt-2 '}rounded-xl max-w-full sm:max-w-[260px] max-h-[240px] sm:max-h-[260px] object-cover border border-white/10`}
                               />
                             )}
                           </div>
@@ -923,7 +960,7 @@ export default function InboxConsole({
 
               {isTyping && (
                 <div className="flex w-full justify-end">
-                  <div className="bg-gradient-to-b from-white/[0.12] via-[#1a1b22] to-[#121318] border border-white/20 max-w-[72%] rounded-[16px] rounded-br-[4px] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_16px_rgba(0,0,0,0.4)]">
+                  <div className="bg-gradient-to-b from-white/[0.12] via-[#1a1b22] to-[#121318] border border-white/20 max-w-[85%] sm:max-w-[72%] rounded-[16px] rounded-br-[4px] p-3.5 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_16px_rgba(0,0,0,0.4)]">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce" />
                       <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-bounce [animation-delay:0.2s]" />
@@ -939,13 +976,13 @@ export default function InboxConsole({
             </div>
 
             {/* Composer matching Picture 1 & 2 Apple Glass Design */}
-            <footer className="p-4 border-t border-white/10 bg-black/30 backdrop-blur-xl space-y-3">
+            <footer className="p-2.5 sm:p-4 border-t border-white/10 bg-black/30 backdrop-blur-xl space-y-2 sm:space-y-3 shrink-0">
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleSendMessage(inputText);
                 }}
-                className="flex gap-2 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/20 rounded-full p-1.5 pl-3.5 items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_10px_30px_rgba(0,0,0,0.4)] backdrop-blur-md"
+                className="flex gap-1.5 sm:gap-2 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/20 rounded-full p-1 sm:p-1.5 pl-2.5 sm:pl-3.5 items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_10px_30px_rgba(0,0,0,0.4)] backdrop-blur-md"
               >
                 <button 
                   type="button" 
@@ -962,7 +999,7 @@ export default function InboxConsole({
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Type a message or use '/' for templates…"
-                  className="flex-grow bg-transparent text-[13.5px] text-white placeholder-white/40 focus:outline-none px-2 font-sans"
+                  className="flex-grow min-w-0 bg-transparent text-[13.5px] text-white placeholder-white/40 focus:outline-none px-1.5 sm:px-2 font-sans"
                 />
 
                 <button
@@ -975,63 +1012,65 @@ export default function InboxConsole({
               </form>
 
               {/* Action Chips + AI Copilot Control matching Picture 2 Apple Glass */}
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button 
-                  type="button"
-                  onClick={() => setInputText("Here is a customized quote for a bulk order of 5 units. We can offer a discounted rate of $1,199.00 per unit.")}
-                  className="bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white/90 hover:text-white font-medium text-[11.5px] px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md"
-                >
-                  <span className="text-white/60">✦</span> Suggest quote
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setInputText("The SM-99 Carbon L is one of our premium executive units featuring fully customized hardware.")}
-                  className="bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white/90 hover:text-white font-medium text-[11.5px] px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md"
-                >
-                  <span className="text-white/60">📄</span> Insert SKU
-                </button>
-
-                {activeChat?.platform === 'websocket' && (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar flex-nowrap min-w-0">
                   <button 
                     type="button"
-                    onClick={() => {
-                      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      const custMsg = {
-                        id: `m-cust-ws-${Date.now()}`,
-                        sender: 'customer' as const,
-                        text: `Sure! My name is ${activeChat.customerName} and my address is House 21, Road 7, Banani, Dhaka.`,
-                        time: timestamp
-                      };
-                      onUpdateConversation(activeChat.id, {
-                        messages: [...activeChat.messages, custMsg],
-                        lastMessage: custMsg.text,
-                        time: 'Just now'
-                      });
-                    }}
-                    className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/30 text-[#8cb4ff] font-medium text-[11.5px] px-3.5 py-2 rounded-xl cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md"
+                    onClick={() => setInputText("Here is a customized quote for a bulk order of 5 units. We can offer a discounted rate of $1,199.00 per unit.")}
+                    className="bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white/90 hover:text-white font-medium text-[11px] sm:text-[11.5px] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md whitespace-nowrap shrink-0"
                   >
-                    ⚡ Simulate customer order reply
+                    <span className="text-white/60">✦</span> Suggest quote
                   </button>
-                )}
+                  <button 
+                    type="button"
+                    onClick={() => setInputText("The SM-99 Carbon L is one of our premium executive units featuring fully customized hardware.")}
+                    className="bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white/90 hover:text-white font-medium text-[11px] sm:text-[11.5px] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md whitespace-nowrap shrink-0"
+                  >
+                    <span className="text-white/60">📄</span> Insert SKU
+                  </button>
+
+                  {activeChat?.platform === 'websocket' && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const custMsg = {
+                          id: `m-cust-ws-${Date.now()}`,
+                          sender: 'customer' as const,
+                          text: `Sure! My name is ${activeChat.customerName} and my address is House 21, Road 7, Banani, Dhaka.`,
+                          time: timestamp
+                        };
+                        onUpdateConversation(activeChat.id, {
+                          messages: [...activeChat.messages, custMsg],
+                          lastMessage: custMsg.text,
+                          time: 'Just now'
+                        });
+                      }}
+                      className="bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/30 text-[#8cb4ff] font-medium text-[11px] sm:text-[11.5px] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl cursor-pointer transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-md whitespace-nowrap shrink-0"
+                    >
+                      ⚡ Simulate reply
+                    </button>
+                  )}
+                </div>
 
                 {/* AI Copilot toggle control matching Picture 2 prototype */}
                 <div 
                   onClick={handleToggleAutomation}
-                  className={`ml-auto flex items-center gap-3 px-4 py-2 rounded-full cursor-pointer select-none transition-all border backdrop-blur-xl ${
+                  className={`shrink-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full cursor-pointer select-none transition-all border backdrop-blur-xl ${
                     activeChat?.status === 'AI Managed'
                       ? 'bg-gradient-to-r from-[#2176ff] via-[#00a8e8] to-[#00d2ff] border-white/50 text-white shadow-[0_0_25px_rgba(0,168,232,0.65),inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-white/20'
                       : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/20 text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]'
                   }`}
                 >
-                  <span className="font-sans text-[12px] font-bold flex items-center gap-1">
+                  <span className="font-sans text-[11px] sm:text-[12px] font-bold flex items-center gap-1 whitespace-nowrap">
                     ✦ AI copilot
                   </span>
                   
                   {/* Glass Pill Track & Glowing White Knob matching Picture 2 */}
-                  <div className="w-[38px] h-[20px] bg-black/30 border border-white/40 rounded-full relative p-[2px] shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+                  <div className="w-[34px] sm:w-[38px] h-[18px] sm:h-[20px] bg-black/30 border border-white/40 rounded-full relative p-[2px] shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
                     <div 
-                      className={`w-[14px] h-[14px] rounded-full bg-white transition-all duration-200 cubic-bezier(0.4,0,0.2,1) shadow-[0_2px_6px_rgba(0,0,0,0.4),0_0_8px_rgba(255,255,255,0.8)] ${
-                        activeChat?.status === 'AI Managed' ? 'translate-x-[18px]' : 'translate-x-0'
+                      className={`w-[12px] sm:w-[14px] h-[12px] sm:h-[14px] rounded-full bg-white transition-all duration-200 cubic-bezier(0.4,0,0.2,1) shadow-[0_2px_6px_rgba(0,0,0,0.4),0_0_8px_rgba(255,255,255,0.8)] ${
+                        activeChat?.status === 'AI Managed' ? 'translate-x-[16px] sm:translate-x-[18px]' : 'translate-x-0'
                       }`}
                     />
                   </div>
@@ -1040,13 +1079,31 @@ export default function InboxConsole({
             </footer>
           </main>
 
-          {/* Pane 3: Right Cart Panel (No top header bar, section-based layout) */}
+          {/* Pane 3: Right Cart Panel */}
           <div
             {...rightPane.handleProps}
             title="Drag to resize · double-click to reset"
             className={`hidden lg:block w-1.5 -mx-[3px] z-10 shrink-0 cursor-col-resize transition-colors ${rightPane.dragging ? 'bg-[#00a8e8]/60' : 'hover:bg-[#00a8e8]/40'}`}
           />
-          <aside className={`bg-[#0d0e14] flex flex-col h-full lg:w-[var(--inbox-right)] min-w-[240px] overflow-hidden shrink-0 ${mobileView === 'info' ? 'flex' : 'hidden lg:flex'}`}>
+          <aside className={`bg-[#0d0e14] flex-col h-full w-full lg:w-[var(--inbox-right)] min-w-0 lg:min-w-[240px] overflow-hidden shrink-0 ${mobileView === 'info' ? 'flex' : 'hidden lg:flex'}`}>
+            {/* Mobile Header for Cart & Orders View */}
+            <header className="lg:hidden h-14 px-3 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.01] shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setMobileView('chat')}
+                  aria-label="Back to chat"
+                  className="p-2 -ml-1 text-white/80 hover:text-white rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 cursor-pointer shrink-0 flex items-center gap-1 font-sans text-xs font-semibold transition-colors"
+                >
+                  <ChevronLeft className="h-4.5 w-4.5" />
+                  <span>Back to chat</span>
+                </button>
+              </div>
+              <span className="font-sans text-xs font-bold text-white/75 truncate">
+                {activeChat ? getChatDisplayName(activeChat) : 'Cart & Orders'}
+              </span>
+            </header>
+
             <section className="p-4 space-y-4 flex-grow min-h-0 overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between">
                 <h4 className="font-sans text-[13px] font-bold text-white/80 tracking-wide uppercase">

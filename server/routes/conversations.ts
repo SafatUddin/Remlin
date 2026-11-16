@@ -73,13 +73,35 @@ export function createConversationsRouter(): express.Router {
       const [conversations, lowStockProducts, recentOrders] = await Promise.all([
         prisma.conversation.findMany({
           where: { storeId },
-          include: { messages: { select: inboxMessageSelect, orderBy: { createdAt: 'desc' }, take: 1 } },
+          select: {
+            id: true,
+            customerName: true,
+            isComplaint: true,
+            channelType: true,
+            messages: {
+              select: { sender: true, text: true, createdAt: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
           orderBy: { lastMessageAt: 'desc' },
           take: 20,
         }),
-        prisma.product.findMany({ where: { storeId, inventory: { lt: 10 } }, orderBy: { inventory: 'asc' } }),
+        prisma.product.findMany({
+          where: { storeId, inventory: { lt: 10 } },
+          select: { id: true, name: true, inventory: true },
+          orderBy: { inventory: 'asc' },
+          take: 15,
+        }),
         prisma.order.findMany({
           where: { storeId },
+          select: {
+            id: true,
+            items: true,
+            createdAt: true,
+            conversationId: true,
+            customerName: true,
+          },
           orderBy: { createdAt: 'desc' },
           take: 10,
         }),
@@ -97,6 +119,8 @@ export function createConversationsRouter(): express.Router {
             body: `${c.customerName || 'A customer'}: "${last.text.slice(0, 60)}"`,
             time: last.createdAt,
             platform: CHANNEL_TO_PLATFORM[c.channelType] || 'websocket',
+            conversationId: c.id,
+            customerName: c.customerName,
           });
         }
       }

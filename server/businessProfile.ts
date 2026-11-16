@@ -73,7 +73,6 @@ export function businessProfileToText(raw: unknown, shareBusinessInfo = true): s
   if (p.pay) L.push(`How customers pay (say exactly this): ${p.pay}`);
   if (p.returns) L.push(`Returns and exchange rule: ${p.returns}`);
   if (p.addr) L.push(`Address customers as ${p.addr === 'sir' ? 'Sir / Ma’am' : 'Bhaiya / Apu'}${p.firstName ? ', putting their first name first' : ''}.`);
-  if (p.first) L.push(`First message to a new customer: ${p.first}`);
   if (p.msgs !== undefined || L.length) {
     const on = orderMessageSettings(raw);
     const keys = Object.keys(on) as OrderMessageKey[];

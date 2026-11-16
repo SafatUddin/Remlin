@@ -942,49 +942,9 @@ export async function deliverAgentReply(
 // skips generateAndStoreAgentReply when this returns true) so the customer doesn't get
 // two back-to-back greeting-shaped messages on their very first "hello."
 export async function sendOpeningGreetingIfNew(
-  isNewConversation: boolean,
-  conversation: { id: string; storeId: string; status: string; channelType: string; externalUserId: string | null }
+  _isNewConversation: boolean,
+  _conversation: { id: string; storeId: string; status: string; channelType: string; externalUserId: string | null }
 ): Promise<boolean> {
-  if (!isNewConversation) return false;
-  const store = await prisma.store.findUnique({ where: { id: conversation.storeId } });
-  if (!store || !store.openingText) return false;
-
-  const isAutopilot = conversation.status === 'AI_MANAGED';
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      sender: 'AI',
-      text: store.openingText,
-      imageUrl: store.openingImageUrl || undefined,
-      pending: !isAutopilot,
-    },
-  });
-  await prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } });
-
-  if (!isAutopilot || !conversation.externalUserId) return true;
-  try {
-    if (await deliverChannelMessage(conversation, store.openingText, store.openingImageUrl || undefined)) return true;
-    if (conversation.channelType === 'FACEBOOK') {
-      const pageAccessToken = await getPageAccessTokenForStore(conversation.storeId);
-      if (pageAccessToken) {
-        await sendMessengerMessage(pageAccessToken, conversation.externalUserId, store.openingText);
-        if (store.openingImageUrl) await sendMessengerImage(pageAccessToken, conversation.externalUserId, store.openingImageUrl);
-      }
-    } else if (conversation.channelType === 'WHATSAPP') {
-      const waCreds = await getWhatsAppCredentialsForStore(conversation.storeId);
-      if (waCreds) {
-        await sendWhatsAppMessage(waCreds.phoneNumberId, waCreds.accessToken, conversation.externalUserId, store.openingText);
-        if (store.openingImageUrl) await sendWhatsAppImage(waCreds.phoneNumberId, waCreds.accessToken, conversation.externalUserId, store.openingImageUrl);
-      }
-    } else if (conversation.channelType === 'INSTAGRAM') {
-      const igCreds = await getInstagramCredentialsForStore(conversation.storeId);
-      if (igCreds) {
-        await sendInstagramMessage(igCreds.igAccountId, igCreds.accessToken, conversation.externalUserId, store.openingText);
-        if (store.openingImageUrl) await sendInstagramImage(igCreds.igAccountId, igCreds.accessToken, conversation.externalUserId, store.openingImageUrl);
-      }
-    }
-  } catch (err) {
-    console.error(`Failed to deliver opening greeting to ${conversation.channelType}:`, err);
-  }
-  return true;
+  // Always let the AI agent reply directly based on the customer's question or message.
+  return false;
 }

@@ -44,7 +44,6 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
     returns: bp.returns || '',
     addr: (bp.addr as string) || 'sir',
     firstName: !!bp.firstName,
-    first: bp.first || '',
   });
   const set = (k: keyof typeof f, v: any) => setF((p) => ({ ...p, [k]: v }));
 
@@ -70,7 +69,7 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
           sell: f.sell.trim(), hotline: f.hotline.trim(), address: f.address.trim(),
           hours: f.hours, inC: f.inC, inF: f.inF, inS: f.inS, outC: f.outC, outF: f.outF, outS: f.outS,
           off: f.off, msgs: f.msgs, extra: f.extra, pay: f.pay, returns: f.returns,
-          addr: f.addr, firstName: f.firstName, first: f.first,
+          addr: f.addr, firstName: f.firstName,
         },
       });
       onComplete(response);
@@ -109,12 +108,12 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
       {label}
     </label>
   );
-  const subCard = 'zone-b-grey1 p-6 flex flex-col gap-5';
+  const subCard = 'zone-b-grey1 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5';
 
   return (
     <form onSubmit={handleSubmit} className="w-full flex flex-col gap-6">
-      <section className="zone-b-grey2 p-8 flex flex-col gap-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+      <section className="zone-b-grey2 p-4 sm:p-8 flex flex-col gap-6 sm:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 sm:gap-y-6">
           {fg('Business name', 'storeName', inp('name', 'Your shop name', 'text', { autoComplete: 'organization' }), 'The name your customers know.')}
           {fg('What do you sell?', 'sell', inp('sell', 'Women’s clothing'), 'A few words is plenty — clothing, cosmetics, electronics.')}
           {fg('Open hours', 'hours', inp('hours', '10am–8pm, Sat–Thu'), 'So it never promises a call at midnight.')}
@@ -129,7 +128,7 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
           {([['Inside Dhaka', 'inC', 'inF', 'inS'], ['Outside Dhaka', 'outC', 'outF', 'outS']] as const).map(([label, c, fa, sl]) => (
             <div key={label} className="flex flex-col gap-3">
               <span className="font-sans text-sm font-bold text-white">{label}</span>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 {fg('Charge (BDT)', c, inp(c, '', 'number', { min: 0 }))}
                 {fg('Fastest (days)', fa, inp(fa, '', 'number', { min: 0 }))}
                 {fg('Slowest (days)', sl, inp(sl, '', 'number', { min: 0 }))}
@@ -196,7 +195,6 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
               </label>
             </div>
           ), 'For example: Rina, Ma’am. Everywhere it speaks for you.')}
-          {fg('First message', 'first', inp('first', 'Hello! How can we help you today?'), 'What it says when someone writes for the first time.', true)}
         </div>
       </section>
 
@@ -204,11 +202,11 @@ export default function BusinessProfileForm({ merchant, store, onComplete, submi
         {feedback && <Feedback key="form-fb" type={feedback.type} message={feedback.message} />}
       </AnimatePresence>
 
-      <div className="flex items-center gap-5">
+      <div className="flex flex-wrap items-center gap-4 sm:gap-5">
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2.5 btn-copilot font-sans text-xs font-bold uppercase tracking-wider px-7 py-3.5"
+          className="inline-flex items-center justify-center gap-2.5 btn-copilot font-sans text-xs font-bold uppercase tracking-wider px-7 py-3.5 w-full sm:w-auto"
         >
           {saving && <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
           {saving ? 'Saving…' : submitLabel}

@@ -70,16 +70,16 @@ export default function AgentPersona({
     <div className="w-full flex-grow flex flex-col text-left">
       <DashboardHeader title="AI PERSONA" searchPlaceholder="Search settings…" />
 
-      <div className="w-full flex-grow p-6 md:p-8 overflow-y-auto">
-        <div className="w-full space-y-6">
+      <div className="w-full flex-grow p-3.5 sm:p-6 md:p-8 overflow-y-auto">
+        <div className="w-full space-y-5 sm:space-y-6">
           {/* Page Header */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="font-sans font-bold text-[24px] text-white flex items-center gap-3 tracking-tight">
-                <Sparkles className="text-[#00a8e8] h-6 w-6" />
+              <h1 className="font-sans font-bold text-xl sm:text-[24px] text-white flex items-center gap-2.5 sm:gap-3 tracking-tight">
+                <Sparkles className="text-[#00a8e8] h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
                 AI Agent Persona
               </h1>
-              <p className="text-[14px] text-white/60">
+              <p className="text-xs sm:text-[14px] text-white/60">
                 Configure how your AI assistant communicates with customers and handles orders
               </p>
             </div>

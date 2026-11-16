@@ -76,6 +76,7 @@ export function login(input: { email: string; password: string }) {
 
 /** Revoke the current session on the server (clears HttpOnly cookie). */
 export async function logout(): Promise<void> {
+  clearDashboardCache();
   try {
     await fetch('/api/auth/logout', {
       method: 'POST',
@@ -361,8 +362,28 @@ export interface ApiNotification {
   customerName?: string;
 }
 
-export function listNotifications() {
-  return request<ApiNotification[]>('/api/notifications');
+let cachedNotifications: ApiNotification[] | null = null;
+let inFlightNotifications: Promise<ApiNotification[]> | null = null;
+
+export function getCachedNotifications(): ApiNotification[] | null {
+  return cachedNotifications;
+}
+
+export function listNotifications(): Promise<ApiNotification[]> {
+  if (!inFlightNotifications) {
+    inFlightNotifications = request<ApiNotification[]>('/api/notifications')
+      .then((data) => {
+        cachedNotifications = data;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shopmate_notifications_updated', { detail: data }));
+        }
+        return data;
+      })
+      .finally(() => {
+        inFlightNotifications = null;
+      });
+  }
+  return inFlightNotifications;
 }
 
 export interface ApiChannel {
@@ -525,19 +546,58 @@ export interface ApiOrder {
   trackingUrl?: string | null;
 }
 
-export function listOrders() {
-  return request<ApiOrder[]>('/api/orders');
+let cachedOrders: ApiOrder[] | null = null;
+let inFlightOrders: Promise<ApiOrder[]> | null = null;
+
+export function getCachedOrders(): ApiOrder[] | null {
+  return cachedOrders;
 }
 
-export function updateOrderStatus(id: string, status: OrderStatusLabel, trackingCode?: string) {
-  return request<ApiOrder>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status, trackingCode }) });
+export function listOrders(): Promise<ApiOrder[]> {
+  if (!inFlightOrders) {
+    inFlightOrders = request<ApiOrder[]>('/api/orders')
+      .then((data) => {
+        cachedOrders = data;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('shopmate_orders_updated', { detail: data }));
+        }
+        return data;
+      })
+      .finally(() => {
+        inFlightOrders = null;
+      });
+  }
+  return inFlightOrders;
 }
 
-export function createOrderFromConversation(conversationId: string, input: { customerName?: string; customerPhone?: string; address: string }) {
-  return request<ApiOrder>(`/api/conversations/${conversationId}/orders`, {
+export async function updateOrderStatus(id: string, status: OrderStatusLabel, trackingCode?: string) {
+  const updated = await request<ApiOrder>(`/api/orders/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, trackingCode }),
+  });
+  if (cachedOrders) {
+    cachedOrders = cachedOrders.map((o) => (o.id === id ? updated : o));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shopmate_orders_updated', { detail: cachedOrders }));
+    }
+  }
+  return updated;
+}
+
+export async function createOrderFromConversation(conversationId: string, input: { customerName?: string; customerPhone?: string; address: string }) {
+  const created = await request<ApiOrder>(`/api/conversations/${conversationId}/orders`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  if (cachedOrders) {
+    cachedOrders = [created, ...cachedOrders.filter((o) => o.id !== created.id)];
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shopmate_orders_updated', { detail: cachedOrders }));
+    }
+  }
+  // Refresh notifications in background so the new order notification is ready immediately
+  void listNotifications().catch(() => {});
+  return created;
 }
 
 export interface ApiAnalyticsActivity {
@@ -602,18 +662,50 @@ export interface CourierStatus {
   webhookUrls: { pathao: string | null; steadfast: string | null };
 }
 
-export function getCourier() {
-  return request<CourierStatus>('/api/courier');
+let cachedCourier: CourierStatus | null = null;
+let inFlightCourier: Promise<CourierStatus> | null = null;
+
+export function getCachedCourier(): CourierStatus | null {
+  return cachedCourier;
 }
 
-export function saveCourier(provider: 'pathao' | 'steadfast', keys: Record<string, string>) {
-  return request<CourierStatus>('/api/courier', { method: 'PUT', body: JSON.stringify({ provider, keys }) });
+export function clearDashboardCache() {
+  cachedOrders = null;
+  inFlightOrders = null;
+  cachedNotifications = null;
+  inFlightNotifications = null;
+  cachedCourier = null;
+  inFlightCourier = null;
 }
 
-export function disconnectCourier() {
-  return request<CourierStatus>('/api/courier', { method: 'DELETE' });
+export function getCourier(): Promise<CourierStatus> {
+  if (!inFlightCourier) {
+    inFlightCourier = request<CourierStatus>('/api/courier')
+      .then((data) => {
+        cachedCourier = data;
+        return data;
+      })
+      .finally(() => {
+        inFlightCourier = null;
+      });
+  }
+  return inFlightCourier;
 }
 
-export function skipCourier() {
-  return request<CourierStatus>('/api/courier/skip', { method: 'POST' });
+export async function saveCourier(provider: 'pathao' | 'steadfast', keys: Record<string, string>) {
+  const status = await request<CourierStatus>('/api/courier', { method: 'PUT', body: JSON.stringify({ provider, keys }) });
+  cachedCourier = status;
+  return status;
+}
+
+export async function disconnectCourier() {
+  const status = await request<CourierStatus>('/api/courier', { method: 'DELETE' });
+  cachedCourier = status;
+  return status;
+}
+
+export async function skipCourier() {
+  const status = await request<CourierStatus>('/api/courier/skip', { method: 'POST' });
+  cachedCourier = status;
+  return status;
 }

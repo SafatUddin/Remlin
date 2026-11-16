@@ -1,3 +1,5 @@
+import type { ApiOrder } from './lib/api';
+
 export type Tab =
   | 'landing'
   | 'login'

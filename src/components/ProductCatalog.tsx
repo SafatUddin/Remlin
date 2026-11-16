@@ -310,8 +310,10 @@ export default function ProductCatalog({
   const openImageMenu = (productId: string, anchor: HTMLElement) => {
     const rect = anchor.getBoundingClientRect();
     const menuHeight = 96;
+    const menuWidth = 176;
     const top = rect.bottom + 6 + menuHeight > window.innerHeight ? rect.top - menuHeight - 6 : rect.bottom + 6;
-    setImageMenu((current) => (current?.productId === productId ? null : { productId, top, left: rect.left }));
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12));
+    setImageMenu((current) => (current?.productId === productId ? null : { productId, top, left }));
   };
 
   const startChangeImage = (productId: string) => {
@@ -380,27 +382,27 @@ export default function ProductCatalog({
         onSearchChange={setSearchTerm}
       />
 
-      <div className="w-full flex-grow space-y-6 p-6 md:p-8">
+      <div className="w-full flex-grow space-y-4 sm:space-y-6 p-3.5 sm:p-6 md:p-8">
         <div className="grid grid-cols-1 gap-6 items-start">
 
           {/* Product Catalog Box */}
-          <div className="zone-b-grey2 p-6 space-y-5">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.07]">
+          <div className="zone-b-grey2 p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <div className="flex flex-wrap justify-between items-center gap-3 pb-3 sm:pb-4 border-b border-white/[0.07]">
               <div>
-                <h3 className="font-sans font-bold text-[19px] text-white tracking-tight">Product Catalog</h3>
-                <p className="text-[13px] text-white/55 mt-0.5">
+                <h3 className="font-sans font-bold text-lg sm:text-[19px] text-white tracking-tight">Product Catalog</h3>
+                <p className="text-xs sm:text-[13px] text-white/55 mt-0.5">
                   {filteredProducts.length} items verified & dynamically modeled inside AI context
                 </p>
               </div>
 
               {isWebsiteConnected ? (
-                <div className="status-success px-3 py-1.5 rounded-full text-xs font-bold font-sans flex items-center gap-2">
+                <div className="status-success px-3 py-1.5 rounded-full text-xs font-bold font-sans flex items-center gap-2 shrink-0">
                   <CheckCircle className="h-4 w-4" /> Live Website Sync Active
                 </div>
               ) : (
                 <button
                   onClick={() => (showAddForm ? resetProductForm() : openAddForm())}
-                  className="btn-accent px-4 py-2 font-sans font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                  className="btn-accent px-4 py-2 font-sans font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {showAddForm ? 'Cancel' : 'Add product'}
@@ -626,10 +628,96 @@ export default function ProductCatalog({
               </div>
             )}
 
-            {/* Dynamic Table modeled from fetched info */}
+            {/* Dynamic Table / Mobile Cards modeled from fetched info */}
             <div className="border border-white/[0.07] rounded-2xl overflow-hidden bg-black/30 w-full overflow-x-auto">
               <div className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 min-w-full">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                {/* Mobile Cards View (< md) */}
+                <div className="md:hidden">
+                  {filteredProducts.length > 0 && (
+                    <div className="px-4 py-2.5 bg-white/[0.05] border-b border-white/[0.07] flex items-center justify-between">
+                      <label className="flex items-center gap-2.5 text-xs font-sans font-semibold text-white/60 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={toggleSelectAllFiltered}
+                          className="h-4 w-4 accent-blue-400 cursor-pointer"
+                        />
+                        <span>Select all ({filteredProducts.length})</span>
+                      </label>
+                    </div>
+                  )}
+                  {filteredProducts.length === 0 ? (
+                    <div className="p-8 text-center text-white/40 font-sans text-xs">
+                      No matching products indexed in catalog. Connect Shopify or upload an Excel/CSV product sheet to populate.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/[0.06]">
+                      {filteredProducts.map((p) => (
+                        <div
+                          key={p.id}
+                          className={`p-3.5 space-y-2.5 transition-colors ${selectedIds.has(p.id) ? 'bg-white/[0.05]' : 'hover:bg-white/[0.02]'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(p.id)}
+                              onChange={() => toggleSelected(p.id)}
+                              className="h-4 w-4 accent-blue-400 cursor-pointer mt-4 shrink-0"
+                              aria-label={`Select ${p.name}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => openImageMenu(p.id, e.currentTarget)}
+                              disabled={uploadingImageId === p.id}
+                              className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 cursor-pointer shadow-sm"
+                              title="Product photo options"
+                            >
+                              <ProductImage product={p} className="w-full h-full object-cover" />
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditClick(p)}
+                                  className="font-sans font-bold text-white text-[14px] leading-snug text-left hover:underline cursor-pointer inline-flex items-center gap-1.5"
+                                >
+                                  <span className="line-clamp-2">{p.name}</span>
+                                  <Pencil className="h-3 w-3 text-white/40 shrink-0" />
+                                </button>
+                                <span className="font-sans font-bold text-white text-[14px] shrink-0">
+                                  {formatProductPrice(p, defaultCurrency || undefined)}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                <span className="font-mono text-[11px] text-white/50 font-semibold">{p.sku}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
+                                  p.inventory > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                }`}>
+                                  {p.inventory > 0 ? `${p.inventory} units` : 'Out of Stock'}
+                                </span>
+                                {p.status === 'Trained' ? (
+                                  <span className="status-success px-2 py-0.5 text-[10px] font-bold rounded-full inline-flex items-center gap-1">
+                                    <CheckCircle className="h-2.5 w-2.5" /> Trained
+                                  </span>
+                                ) : (
+                                  <span className="status-warning px-2 py-0.5 text-[10px] font-bold rounded-full inline-flex items-center gap-1">
+                                    <AlertCircle className="h-2.5 w-2.5" /> Pending
+                                  </span>
+                                )}
+                              </div>
+                              {p.description && (
+                                <p className="text-[11.5px] text-white/55 line-clamp-2 mt-1.5 leading-relaxed">{p.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop Table View (md+) */}
+                <table className="hidden md:table w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="bg-white/[0.05] border-b border-white/[0.07] text-[11px] font-sans text-white/50 tracking-[0.11em] font-bold uppercase">
                     <th className="pl-4 pr-0 py-4 w-8">
@@ -876,10 +964,10 @@ export default function ProductCatalog({
                   </button>
                 </div>
               </header>
-              <div className="flex-1 min-h-0 flex items-center justify-center bg-black/40 p-4">
+              <div className="flex-1 min-h-0 flex items-center justify-center bg-black/40 p-3 sm:p-4">
                 <ProductImage
                   product={viewingProduct}
-                  className="max-w-full max-h-[calc(92vh-90px)] min-w-[min(60vw,480px)] min-h-[min(50vh,360px)] object-contain rounded-lg"
+                  className="max-w-full max-h-[calc(92vh-90px)] sm:min-w-[min(60vw,480px)] sm:min-h-[min(50vh,360px)] object-contain rounded-lg"
                 />
               </div>
             </motion.div>

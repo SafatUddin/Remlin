@@ -62,13 +62,13 @@ export default function CourierStep({ onChange, onDone }: { onChange: (s: Courie
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {([['self', 'I’ll book parcels myself'], ['pathao', 'Pathao'], ['steadfast', 'Steadfast']] as [Choice, string][]).map(([id, text]) => (
           <button
             key={id}
             type="button"
             onClick={() => { setChoice(id); setError(''); }}
-            className={`px-5 py-4 rounded-full border font-sans text-[15px] font-semibold cursor-pointer transition-colors ${choice === id ? 'tab-glass tab-glass-on border-[#3d7bff]/70 text-white' : (id === 'self' ? status?.skipped : status?.connected && status.provider === id) ? 'tab-glass tab-glass-done border-emerald-400/40 text-emerald-300' : 'tab-glass border-white/15 text-white/60 hover:text-white'}`}
+            className={`px-4 sm:px-5 py-3 sm:py-4 rounded-full border font-sans text-sm sm:text-[15px] font-semibold cursor-pointer transition-colors ${choice === id ? 'tab-glass tab-glass-on border-[#3d7bff]/70 text-white' : (id === 'self' ? status?.skipped : status?.connected && status.provider === id) ? 'tab-glass tab-glass-done border-emerald-400/40 text-emerald-300' : 'tab-glass border-white/15 text-white/60 hover:text-white'}`}
           >
             {text}
             {id === 'self' ? (status?.skipped && <span className="ml-2 text-emerald-300">· chosen</span>) : (status?.connected && status.provider === id && <span className="ml-2 text-emerald-300">· connected</span>)}
@@ -79,8 +79,8 @@ export default function CourierStep({ onChange, onDone }: { onChange: (s: Courie
       {error && <div className="status-danger text-sm p-3.5 rounded-xl font-sans">{error}</div>}
 
       {choice !== 'self' && (
-        <section className={`${card} p-8 flex flex-col gap-6`}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <section className={`${card} p-4 sm:p-8 flex flex-col gap-5 sm:gap-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {fields.map(([key, l, secret]) => (
               <div key={key} className="flex flex-col gap-2">
                 <label className="font-sans text-[13px] font-bold text-white">{l}</label>
@@ -134,7 +134,7 @@ export default function CourierStep({ onChange, onDone }: { onChange: (s: Courie
       )}
 
       {choice === 'self' && (
-        <section className={`${card} p-8 flex flex-col gap-5`}>
+        <section className={`${card} p-4 sm:p-8 flex flex-col gap-5`}>
           <p className="font-sans text-[15px] text-white/70 leading-relaxed">You will book parcels with your courier yourself. When you mark an order “In transit”, your customer is told it is on its way — without a tracking link. You can connect Pathao or Steadfast any time later to send tracking links.</p>
           <div className="flex items-center gap-4">
             <button

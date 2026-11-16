@@ -166,13 +166,13 @@ export default function OnboardingPage({
       body = <CourierStep onChange={setCourier} onDone={() => { const n = rows[idx + 1]; if (n && !n.locked) setStep(n.id); }} />;
     } else if (step === 'products') {
       body = (
-        <div className="flex flex-col gap-6">
-          <section className="zone-b-grey2 px-6 py-4 flex items-center gap-3">
+        <div className="flex flex-col gap-5 sm:gap-6">
+          <section className="zone-b-grey2 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
             {productCount > 0
-              ? <span className="w-[18px] h-[18px] rounded-full bg-emerald-500 flex items-center justify-center"><Check className="h-3 w-3 text-black" strokeWidth={3} /></span>
-              : <span className="w-[18px] h-[18px] rounded-full border border-white/30" />}
-            <span className="font-sans text-[15px] font-semibold text-white">{productCount > 0 ? `${productCount} product${productCount === 1 ? '' : 's'} in your catalog` : 'Nothing in the catalog yet'}</span>
-            <button onClick={() => onNavigate('catalog')} className="ml-auto font-sans text-xs font-bold uppercase tracking-wider text-white/60 hover:text-white cursor-pointer inline-flex items-center gap-1.5">Open product catalog<ArrowRight className="h-3.5 w-3.5" /></button>
+              ? <span className="w-[18px] h-[18px] rounded-full bg-emerald-500 flex items-center justify-center shrink-0"><Check className="h-3 w-3 text-black" strokeWidth={3} /></span>
+              : <span className="w-[18px] h-[18px] rounded-full border border-white/30 shrink-0" />}
+            <span className="font-sans text-[14px] sm:text-[15px] font-semibold text-white">{productCount > 0 ? `${productCount} product${productCount === 1 ? '' : 's'} in your catalog` : 'Nothing in the catalog yet'}</span>
+            <button onClick={() => onNavigate('catalog')} className="sm:ml-auto font-sans text-xs font-bold uppercase tracking-wider text-white/60 hover:text-white cursor-pointer inline-flex items-center gap-1.5">Open product catalog<ArrowRight className="h-3.5 w-3.5" /></button>
           </section>
           {catalogPanel}
         </div>
@@ -231,19 +231,19 @@ export default function OnboardingPage({
     );
 
     return (
-      <div className="w-full flex-1 flex flex-col gap-7 px-8 lg:px-12 py-8">
+      <div className="w-full flex-1 flex flex-col gap-5 sm:gap-7 px-4 sm:px-8 lg:px-12 py-5 sm:py-8">
         <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="space-y-2">
-            <p className="font-sans text-xs font-bold text-white/40 uppercase tracking-[0.18em]">Step {idx + 1} of {rows.length} · Let’s get you live</p>
-            <h1 className="font-sans text-4xl font-bold text-white tracking-tight">{cur.title}</h1>
+          <div className="space-y-1.5 sm:space-y-2">
+            <p className="font-sans text-[11px] sm:text-xs font-bold text-white/40 uppercase tracking-[0.18em]">Step {idx + 1} of {rows.length} · Let’s get you live</p>
+            <h1 className="font-sans text-2xl sm:text-4xl font-bold text-white tracking-tight">{cur.title}</h1>
           </div>
-          <div className="flex items-center gap-2.5 zone-b-grey2 px-4 py-2.5">
-            <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${live ? 'text-emerald-300 bg-emerald-400/10' : 'text-amber-300 bg-amber-400/10'}`}>{live ? 'Live' : 'Practice mode'}</span>
-            <p className="font-sans text-sm text-white/60">{live ? 'Your assistant answers every customer.' : 'Answers test chats only until you go live.'}</p>
+          <div className="flex items-center gap-2.5 zone-b-grey2 px-3.5 sm:px-4 py-2 sm:py-2.5 w-full sm:w-auto">
+            <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${live ? 'text-emerald-300 bg-emerald-400/10' : 'text-amber-300 bg-amber-400/10'}`}>{live ? 'Live' : 'Practice mode'}</span>
+            <p className="font-sans text-xs sm:text-sm text-white/60">{live ? 'Your assistant answers every customer.' : 'Answers test chats only until you go live.'}</p>
           </div>
         </header>
 
-        <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" aria-label="Setup steps">
+        <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4" aria-label="Setup steps">
           {rows.map((r) => {
             const on = r.id === step;
             const disabled = r.locked && !on;
@@ -253,25 +253,25 @@ export default function OnboardingPage({
                 disabled={disabled}
                 onClick={() => setStep(r.id)}
                 aria-current={on ? 'step' : undefined}
-                className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-full border font-sans text-sm font-semibold transition-colors ${
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-full border font-sans text-xs sm:text-sm font-semibold transition-colors ${
                   on ? TAB_ON : r.done ? TAB_DONE : TAB_OFF
                 } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                {r.done ? <Check className="h-4 w-4" strokeWidth={2.6} /> : disabled ? <Lock className="h-4 w-4" /> : icons[r.id]}
+                {r.done ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={2.6} /> : disabled ? <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" /> : icons[r.id]}
                 <span className="truncate">{r.title}</span>
               </button>
             );
           })}
         </nav>
 
-        <p className="rounded-xl zone-b-grey2 px-6 py-4 font-sans text-[15px] text-white/75">{intros[step]}</p>
+        <p className="rounded-xl zone-b-grey2 px-4 sm:px-6 py-3.5 sm:py-4 font-sans text-[14px] sm:text-[15px] text-white/75">{intros[step]}</p>
 
         <div className="flex-1 flex flex-col">{body}</div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-6 ">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 sm:pt-6">
           <button onClick={() => setStep(prev ? prev.id : null)} className={ghostBtn}><ArrowLeft className="h-4 w-4" />Back</button>
           <p className="hidden lg:block font-sans text-xs text-white/35">Whatever you leave stays at the top of your Onboarding — it is not lost.</p>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             {!isLast && <button onClick={() => setStep(nxt && !nxt.locked ? nxt.id : null)} className={ghostBtn}>Later<ArrowRight className="h-4 w-4" /></button>}
             {continueNode}
           </div>
@@ -281,116 +281,116 @@ export default function OnboardingPage({
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
-      <header className="space-y-1">
-        <p className="font-sans text-[10px] font-bold text-white/40 uppercase tracking-[0.18em]">
-          {merchantName ? `Welcome, ${merchantName}` : 'Welcome'}
-        </p>
-        <h1 className="font-sans text-2xl font-bold text-white tracking-tight">Onboarding</h1>
-      </header>
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-5 sm:py-6 flex flex-col gap-5">
+        <header className="space-y-1">
+          <p className="font-sans text-[10px] font-bold text-white/40 uppercase tracking-[0.18em]">
+            {merchantName ? `Welcome, ${merchantName}` : 'Welcome'}
+          </p>
+          <h1 className="font-sans text-2xl font-bold text-white tracking-tight">Onboarding</h1>
+        </header>
 
-      <section className="zone-b-grey2 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-2.5">
-            <span className="font-sans text-sm font-bold text-white">Setup guide</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-              live ? 'text-emerald-300 bg-emerald-400/10' : 'text-amber-300 bg-amber-400/10'
-            }`}>
-              {live ? 'Live' : 'Practice mode'}
-            </span>
-          </div>
-          <button onClick={() => setStep(next?.id ?? rows.find((r) => !r.locked)!.id)} className="inline-flex items-center gap-1 font-sans text-xs text-white/50 hover:text-white cursor-pointer">
-            Open the setup<ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <div className="px-5 pt-5 pb-4 flex flex-col gap-5">
-          <div className="flex items-center gap-4">
-            <div className="font-sans text-3xl font-bold text-white">
-              {done}<span className="text-base font-semibold text-white/40"> / {rows.length}</span>
+        <section className="zone-b-grey2 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="font-sans text-sm font-bold text-white">Setup guide</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                live ? 'text-emerald-300 bg-emerald-400/10' : 'text-amber-300 bg-amber-400/10'
+              }`}>
+                {live ? 'Live' : 'Practice mode'}
+              </span>
             </div>
-            <div className="flex-1 flex flex-col gap-2">
-              <span className="font-sans text-xs text-white/50">{done} of {rows.length} done</span>
-              <div className="w-full h-[5px] rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-white to-[#a9c6ff] transition-all" style={{ width: `${(done / rows.length) * 100}%` }} />
-              </div>
-            </div>
+            <button onClick={() => setStep(next?.id ?? rows.find((r) => !r.locked)!.id)} className="inline-flex items-center gap-1 font-sans text-xs text-white/50 hover:text-white cursor-pointer">
+              Open the setup<ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
 
-          {next && (
-            <div className="rounded-xl zone-b-grey2 p-5 flex flex-col gap-2.5">
-              <span className="font-sans text-[10px] font-bold text-blue-300 uppercase tracking-[0.18em]">Next step</span>
-              <h2 className="font-sans text-lg font-bold text-white">{next.title}</h2>
-              <p className="font-sans text-[13px] text-white/60 leading-relaxed">{next.text}</p>
-              <div className="flex items-center gap-3 pt-1">
-                <button
-                  onClick={() => openStep(next)}
-                  className="inline-flex items-center gap-2 btn-copilot font-sans text-xs font-bold uppercase tracking-wider px-6 py-3 rounded-lg hover:brightness-110 transition-all cursor-pointer"
-                >
-                  {next.cta!.label}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-                <span className="font-sans text-xs text-white/40">About {next.eta}.</span>
+          <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 flex flex-col gap-5">
+            <div className="flex items-center gap-4">
+              <div className="font-sans text-3xl font-bold text-white">
+                {done}<span className="text-base font-semibold text-white/40"> / {rows.length}</span>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="px-5 pb-2 font-sans text-[10px] font-bold text-white/40 uppercase tracking-[0.18em]">Before you go live</p>
-          <div className="">
-            {rows.map((r) => {
-              const open = openId === r.id;
-              return (
-                <div key={r.id} className="">
-                  <button
-                    onClick={() => setOpenId(open ? null : r.id)}
-                    aria-expanded={open}
-                    className={`w-full flex items-center gap-3.5 px-5 py-3.5 text-left hover:bg-white/[0.03] transition-colors cursor-pointer ${r.locked ? 'opacity-60' : ''}`}
-                  >
-                    {r.done ? (
-                      <span className="w-[18px] h-[18px] rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-                        <Check className="h-3 w-3 text-black" strokeWidth={3} />
-                      </span>
-                    ) : r.locked ? (
-                      <Lock className="h-4 w-4 text-white/40 shrink-0" />
-                    ) : (
-                      <span className="w-[18px] h-[18px] rounded-full border border-white/30 shrink-0" />
-                    )}
-                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                      <span className="font-sans text-[14px] font-semibold text-white">{r.title}</span>
-                      <span className="font-sans text-xs text-white/45 truncate">{r.status}</span>
-                    </span>
-                    <span className="font-sans text-xs text-white/40 shrink-0">{r.eta}</span>
-                    {open ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronRight className="h-3.5 w-3.5 text-white/40" />}
-                  </button>
-                  {open && (
-                    <div className="px-5 pb-5 pl-[52px] flex flex-col gap-3">
-                      <p className="font-sans text-[13px] text-white/60 leading-relaxed">{r.text}</p>
-                      {r.steps.length > 0 && (
-                        <ol className="list-decimal pl-4 space-y-1 font-sans text-[13px] text-white/60">
-                          {r.steps.map((st) => <li key={st}>{st}</li>)}
-                        </ol>
-                      )}
-                      {r.cta && !r.locked && (
-                        <div>
-                          <button
-                            onClick={() => openStep(r)}
-                            className="inline-flex items-center gap-2 glass-chip text-white font-sans text-[11px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg transition-colors cursor-pointer"
-                          >
-                            {r.cta.label}
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+              <div className="flex-1 flex flex-col gap-2">
+                <span className="font-sans text-xs text-white/50">{done} of {rows.length} done</span>
+                <div className="w-full h-[5px] rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-white to-[#a9c6ff] transition-all" style={{ width: `${(done / rows.length) * 100}%` }} />
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {next && (
+              <div className="rounded-xl zone-b-grey2 p-4 sm:p-5 flex flex-col gap-2.5">
+                <span className="font-sans text-[10px] font-bold text-blue-300 uppercase tracking-[0.18em]">Next step</span>
+                <h2 className="font-sans text-base sm:text-lg font-bold text-white">{next.title}</h2>
+                <p className="font-sans text-[13px] text-white/60 leading-relaxed">{next.text}</p>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => openStep(next)}
+                    className="inline-flex items-center gap-2 btn-copilot font-sans text-xs font-bold uppercase tracking-wider px-5 sm:px-6 py-3 rounded-lg hover:brightness-110 transition-all cursor-pointer"
+                  >
+                    {next.cta!.label}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="font-sans text-xs text-white/40">About {next.eta}.</span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </section>
-    </div>
+
+          <div>
+            <p className="px-4 sm:px-5 pb-2 font-sans text-[10px] font-bold text-white/40 uppercase tracking-[0.18em]">Before you go live</p>
+            <div>
+              {rows.map((r) => {
+                const open = openId === r.id;
+                return (
+                  <div key={r.id}>
+                    <button
+                      onClick={() => setOpenId(open ? null : r.id)}
+                      aria-expanded={open}
+                      className={`w-full flex items-center gap-3 sm:gap-3.5 px-4 sm:px-5 py-3.5 text-left hover:bg-white/[0.03] transition-colors cursor-pointer ${r.locked ? 'opacity-60' : ''}`}
+                    >
+                      {r.done ? (
+                        <span className="w-[18px] h-[18px] rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                          <Check className="h-3 w-3 text-black" strokeWidth={3} />
+                        </span>
+                      ) : r.locked ? (
+                        <Lock className="h-4 w-4 text-white/40 shrink-0" />
+                      ) : (
+                        <span className="w-[18px] h-[18px] rounded-full border border-white/30 shrink-0" />
+                      )}
+                      <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                        <span className="font-sans text-[14px] font-semibold text-white">{r.title}</span>
+                        <span className="font-sans text-xs text-white/45 truncate">{r.status}</span>
+                      </span>
+                      <span className="font-sans text-xs text-white/40 shrink-0">{r.eta}</span>
+                      {open ? <ChevronDown className="h-3.5 w-3.5 text-white/40 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-white/40 shrink-0" />}
+                    </button>
+                    {open && (
+                      <div className="px-4 sm:px-5 pb-5 pl-11 sm:pl-[52px] flex flex-col gap-3">
+                        <p className="font-sans text-[13px] text-white/60 leading-relaxed">{r.text}</p>
+                        {r.steps.length > 0 && (
+                          <ol className="list-decimal pl-4 space-y-1 font-sans text-[13px] text-white/60">
+                            {r.steps.map((st) => <li key={st}>{st}</li>)}
+                          </ol>
+                        )}
+                        {r.cta && !r.locked && (
+                          <div>
+                            <button
+                              onClick={() => openStep(r)}
+                              className="inline-flex items-center gap-2 glass-chip text-white font-sans text-[11px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg transition-colors cursor-pointer"
+                            >
+                              {r.cta.label}
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      </div>
   );
 }

@@ -800,7 +800,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
         />
       )}
 
-      <div className={`w-full flex-grow ${embedded ? 'flex flex-col gap-6' : 'space-y-6 p-6 md:p-8'}`}>
+      <div className={`w-full flex-grow ${embedded ? 'flex flex-col gap-5 sm:gap-6' : 'space-y-5 sm:space-y-6 p-3.5 sm:p-6 md:p-8'}`}>
         {fbError && (
           <div className="status-danger text-xs p-3.5 rounded-xl flex items-center justify-between font-sans">
             <span>{fbError}</span>
@@ -811,29 +811,29 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
         )}
 
       {/* Connectivity Banner Content (§8) */}
-      {!embedded && <div className="space-y-3">
+      {!embedded && <div className="space-y-2.5 sm:space-y-3">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/[0.05] border border-white/12 rounded-full text-[11px] font-bold text-white/70 font-sans tracking-[0.10em]">
           <Globe className="h-4 w-4 text-[#7aa8ff]" />
           Channel ecosystem
         </div>
 
-        <h2 className="text-[44px] font-[800] tracking-[-0.03em] text-white leading-tight font-sans">
+        <h2 className="text-[28px] sm:text-[36px] md:text-[44px] font-[800] tracking-[-0.03em] text-white leading-tight font-sans">
           Unify your sales channels
         </h2>
 
-        <p className="text-sm text-white/60 max-w-2xl leading-relaxed font-sans">
+        <p className="text-xs sm:text-sm text-white/60 max-w-2xl leading-relaxed font-sans">
           Connect your social messaging pages and store platforms directly into Remlin. Automate replies, sync product catalogs, and finalize orders from a single interface.
         </p>
       </div>}
 
       {/* Messaging Channels Section */}
-      {!catalogOnly && <div className={channelsOnly ? 'flex-1 flex flex-col gap-6' : 'space-y-4'}>
+      {!catalogOnly && <div className={channelsOnly ? 'flex-1 flex flex-col gap-5 sm:gap-6' : 'space-y-4'}>
         <div className="px-1">
           <h3 className={`${channelsOnly ? 'text-base' : 'text-sm'} font-bold text-white uppercase tracking-[0.12em]`}>Connect your customer channels</h3>
           <p className={`${channelsOnly ? 'text-sm' : 'text-xs'} text-white/50 mt-1`}>{channelsOnly ? 'Connect Facebook, Instagram or WhatsApp' : 'Connect Facebook, Instagram, WhatsApp or add a website widget'}</p>
         </div>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${channelsOnly ? 'gap-8' : 'gap-6'} ${channelsOnly ? 'flex-1 auto-rows-fr' : ''}`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${channelsOnly ? 'gap-5 sm:gap-8' : 'gap-4 sm:gap-6'} ${channelsOnly ? 'flex-1 auto-rows-fr' : ''}`}>
           {filteredIntegrations
             .filter((item) => (channelsOnly ? ['int-fb', 'int-ig', 'int-wa'] : ['int-fb', 'int-ig', 'int-wa', 'int-widget']).includes(item.id))
             .map((item) => {
@@ -844,7 +844,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               return (
                 <div 
                   key={item.id}
-                  className={`flex flex-col justify-between ${channelsOnly ? 'min-h-[300px] gap-8 p-9' : 'h-[260px] p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+                  className={`flex flex-col justify-between ${channelsOnly ? 'min-h-[240px] sm:min-h-[300px] gap-6 sm:gap-8 p-6 sm:p-9' : 'min-h-[240px] sm:h-[260px] p-5 sm:p-6'} rounded-2xl transition-all duration-300 relative group overflow-hidden ${
                     isWhatsAppError 
                       ? 'status-danger !border-0 shadow-[0_14px_36px_rgba(0,0,0,0.55)]' 
                       : isNotConnected 
@@ -1253,9 +1253,9 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="zone-b-grey3 border border-white/20 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col text-left"
+              className="zone-b-grey3 border border-white/20 w-full max-w-lg max-h-[90dvh] rounded-2xl overflow-hidden shadow-2xl flex flex-col text-left"
             >
-              <header className="p-5 border-b border-white/[0.07] bg-black/40 flex justify-between items-center">
+              <header className="p-4 sm:p-5 border-b border-white/[0.07] bg-black/40 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-white/10 border border-white/15 rounded-xl">
                     {renderIcon(integrations.find(i => i.id === activeWizardId)?.logoType || '', "h-5 w-5 text-white")}
@@ -1278,7 +1278,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                 </button>
               </header>
 
-              <div className="p-6 space-y-6 flex-grow">
+              <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 flex-grow overflow-y-auto">
                 {isSimulatingSync ? (
                   <div className="py-8 text-center space-y-4">
                     <RefreshCw className="h-10 w-10 text-[#4d8bff] animate-spin mx-auto" />

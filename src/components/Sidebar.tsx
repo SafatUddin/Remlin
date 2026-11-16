@@ -23,6 +23,7 @@ interface SidebarProps {
   onNavigate: (tab: Tab) => void;
   onLogout: () => void;
   isOpen?: boolean;
+  onOpen?: () => void;
   onClose?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -41,6 +42,7 @@ export default function Sidebar({
   onNavigate, 
   onLogout, 
   isOpen = false, 
+  onOpen,
   onClose,
   isCollapsed,
   onToggleCollapse,
@@ -48,12 +50,37 @@ export default function Sidebar({
   resizeHandleProps,
   isResizing = false
 }: SidebarProps) {
+  const [isMobile, setIsMobile] = React.useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const copilotOn = copilot.managed > 0;
   const copilotPct = copilot.total > 0 ? Math.round((copilot.managed / copilot.total) * 100) : 0;
   const copilotLabel = copilotOn ? 'Copilot on' : 'Copilot off';
   const copilotDetail = copilot.total === 0
     ? 'No open chats yet'
     : `${copilot.managed} of ${copilot.total} open chat${copilot.total === 1 ? '' : 's'} on autopilot`;
+
+  // On mobile (< md), default to the short/collapsed icon-only sidebar unless expanded via isOpen.
+  // On desktop (md+), follow isCollapsed.
+  const effectiveCollapsed = isMobile ? !isOpen : isCollapsed;
+
+  const handleLogoToggle = () => {
+    if (isMobile) {
+      if (effectiveCollapsed) onOpen?.();
+      else onClose?.();
+    } else {
+      onToggleCollapse();
+    }
+  };
 
   const menuItems = [
     { id: 'onboarding', label: 'Onboarding', icon: LayoutDashboard },
@@ -76,55 +103,29 @@ export default function Sidebar({
         />
       )}
 
-      <aside className={`zone-a-sidebar flex flex-col justify-between h-screen fixed top-0 left-0 z-50 md:z-30 select-none ${
+      <aside className={`zone-a-sidebar flex flex-col justify-between h-screen h-[100dvh] fixed top-0 left-0 z-50 md:z-30 select-none translate-x-0 ${
         isResizing ? '' : 'transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]'
       } ${
-        isCollapsed ? 'w-[92px]' : 'w-[290px] md:w-[var(--sidebar-w)]'
-      } ${
-        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        effectiveCollapsed ? 'w-[60px] sm:w-[68px] md:w-[92px]' : 'w-[270px] sm:w-[290px] md:w-[var(--sidebar-w)]'
       }`}>
         <div className="flex flex-col flex-grow no-scrollbar overflow-y-auto">
-          <header className={`px-5 py-4 h-[72px] flex items-center ${isCollapsed ? 'justify-center px-4' : 'justify-between'} border-b border-white/[0.08] relative shrink-0`}>
-            <div className={`flex items-center gap-3 cursor-pointer ${isCollapsed ? 'justify-center' : ''}`} onClick={() => onNavigate('landing')}>
-              <RemlinLogo className="h-8 w-auto shrink-0" />
-              {!isCollapsed && (
-                <span className="font-sans text-[22px] font-bold text-white leading-none tracking-tight">Remlin</span>
-              )}
-            </div>
-            
-            {/* Collapse toggle when expanded */}
-            {!isCollapsed && (
-              <button 
-                onClick={onToggleCollapse}
-                className="hidden md:flex p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
-                title="Collapse sidebar"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-
-            {/* Expand toggle when collapsed */}
-            {isCollapsed && (
-              <button 
-                onClick={onToggleCollapse}
-                className="hidden md:flex p-1 text-white/80 bg-[#163691] border border-blue-400/40 rounded-full hover:bg-white/20 cursor-pointer absolute -right-3 top-7 z-50 shadow-lg"
-                title="Expand sidebar"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-
-            {/* Mobile close */}
-            <button 
-              onClick={onClose}
-              className="md:hidden p-1.5 text-white/50 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
+          <header className={`px-2 sm:px-5 py-3 sm:py-4 h-[60px] sm:h-[72px] flex items-center ${effectiveCollapsed ? 'justify-center px-2 md:px-4' : 'justify-between px-4 sm:px-5'} border-b border-white/[0.08] relative shrink-0`}>
+            <button
+              type="button"
+              onClick={handleLogoToggle}
+              title={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={`flex items-center gap-3 cursor-pointer rounded-xl p-1.5 -m-1.5 hover:bg-white/[0.08] transition-colors ${effectiveCollapsed ? 'justify-center' : ''}`}
             >
-              <X className="h-4 w-4" />
+              <RemlinLogo className="h-7 sm:h-8 w-auto shrink-0" />
+              {!effectiveCollapsed && (
+                <span className="font-sans text-[20px] sm:text-[22px] font-bold text-white leading-none tracking-tight">Remlin</span>
+              )}
             </button>
           </header>
 
           {/* Nav Items matching Picture 1 */}
-          <nav className={`px-4 py-6 flex-grow space-y-2.5 ${isCollapsed ? 'flex flex-col items-center gap-2 px-0' : ''}`}>
+          <nav className={`px-4 py-3 sm:py-6 flex-grow ${effectiveCollapsed ? 'flex flex-col items-center gap-1.5 sm:gap-2 px-0' : 'space-y-2'}`}>
             {menuItems.map((item) => {
               const IconComponent = item.icon;
               const isActive = activeTab === item.id;
@@ -132,10 +133,10 @@ export default function Sidebar({
                 <button
                   key={item.id}
                   onClick={() => onNavigate(item.id as Tab)}
-                  title={isCollapsed ? item.label : undefined}
+                  title={effectiveCollapsed ? item.label : undefined}
                   className={`flex items-center transition-all duration-200 cursor-pointer ${
-                    isCollapsed 
-                      ? `w-12 h-12 rounded-xl justify-center ${
+                    effectiveCollapsed 
+                      ? `w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl justify-center ${
                           isActive 
                             ? 'bg-[#222634] border border-white/20 text-white shadow-md' 
                             : 'bg-transparent text-white/70 hover:text-white hover:bg-white/[0.08]'
@@ -150,7 +151,7 @@ export default function Sidebar({
                   <div className="w-5 h-5 flex items-center justify-center shrink-0">
                     <IconComponent className="h-4.5 w-4.5" />
                   </div>
-                  {!isCollapsed && <span className="font-sans text-[14px] leading-none">{item.label}</span>}
+                  {!effectiveCollapsed && <span className="font-sans text-[14px] leading-none">{item.label}</span>}
                 </button>
               );
             })}
@@ -158,9 +159,9 @@ export default function Sidebar({
         </div>
 
         {/* Footer / AI Training & Settings */}
-        <div className={`p-4 border-t border-white/[0.08] ${isCollapsed ? 'flex flex-col items-center gap-4 px-0' : 'space-y-4'}`}>
+        <div className={`p-2.5 sm:p-4 border-t border-white/[0.08] ${effectiveCollapsed ? 'flex flex-col items-center gap-2.5 sm:gap-4 px-0' : 'space-y-4'}`}>
           {/* Copilot status — reflects how many open chats are actually on autopilot */}
-          {isCollapsed ? (
+          {effectiveCollapsed ? (
             <div
               className={`p-2 rounded-full border transition-all ${copilotOn ? 'border-white/50 ring-1 ring-white/20' : 'bg-white/[0.06] border-white/10'}`}
               style={copilotOn ? { background: COPILOT_GRADIENT, boxShadow: COPILOT_GLOW } : undefined}
@@ -188,41 +189,41 @@ export default function Sidebar({
           )}
 
           {/* Settings & Logout */}
-          <div className={`space-y-1.5 ${isCollapsed ? 'w-full flex flex-col items-center gap-1.5' : ''}`}>
+          <div className={`space-y-1.5 ${effectiveCollapsed ? 'w-full flex flex-col items-center gap-1 sm:gap-1.5' : ''}`}>
             <button
               onClick={() => onNavigate('settings')}
-              title={isCollapsed ? 'Settings' : undefined}
+              title={effectiveCollapsed ? 'Settings' : undefined}
               className={`flex items-center transition-all duration-180 cursor-pointer ${
-                isCollapsed 
-                  ? `w-12 h-12 rounded-xl justify-center ${activeTab === 'settings' ? 'bg-[#2757d8] text-white' : 'text-white/65 hover:text-white hover:bg-white/[0.08]'}`
+                effectiveCollapsed 
+                  ? `w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl justify-center ${activeTab === 'settings' ? 'bg-[#2757d8] text-white' : 'text-white/65 hover:text-white hover:bg-white/[0.08]'}`
                   : `w-full text-left px-4 py-2.5 rounded-xl gap-3.5 ${activeTab === 'settings' ? 'bg-[#2757d8] text-white font-medium' : 'text-white/65 hover:text-white hover:bg-white/[0.08]'}`
               }`}
             >
               <div className="w-5 h-5 flex items-center justify-center shrink-0">
                 <Settings className="h-4.5 w-4.5" />
               </div>
-              {!isCollapsed && <span className="font-sans text-[13.5px]">Settings</span>}
+              {!effectiveCollapsed && <span className="font-sans text-[13.5px]">Settings</span>}
             </button>
 
             <button 
               onClick={onLogout}
-              title={isCollapsed ? 'Log out' : undefined}
+              title={effectiveCollapsed ? 'Log out' : undefined}
               className={`flex items-center transition-all duration-180 cursor-pointer ${
-                isCollapsed 
-                  ? 'w-12 h-12 rounded-xl justify-center text-white/50 hover:text-[#ffb4b4] hover:bg-[rgba(255,90,90,0.14)]'
+                effectiveCollapsed 
+                  ? 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl justify-center text-white/50 hover:text-[#ffb4b4] hover:bg-[rgba(255,90,90,0.14)]'
                   : 'w-full text-left px-4 py-2.5 rounded-xl gap-3.5 text-white/50 hover:text-[#ffb4b4] hover:bg-[rgba(255,90,90,0.14)]'
               }`}
             >
               <div className="w-5 h-5 flex items-center justify-center shrink-0">
                 <LogOut className="h-4.5 w-4.5" />
               </div>
-              {!isCollapsed && <span className="font-sans text-[13.5px]">Log out</span>}
+              {!effectiveCollapsed && <span className="font-sans text-[13.5px]">Log out</span>}
             </button>
           </div>
         </div>
 
         {/* Drag the right edge to resize (double-click to reset) */}
-        {!isCollapsed && resizeHandleProps && (
+        {!effectiveCollapsed && resizeHandleProps && (
           <div
             {...resizeHandleProps}
             title="Drag to resize · double-click to reset"
