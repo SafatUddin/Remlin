@@ -56,6 +56,9 @@ import SettingsPage from './components/SettingsPage';
 import AdminDashboard from './components/AdminDashboard';
 import AdminSettings from './components/AdminSettings';
 
+// The landing page lives at the site root ("/"); every other page uses a "#tab" hash.
+const tabUrl = (tab: Tab) => (tab === 'landing' ? window.location.pathname + window.location.search : `#${tab}`);
+
 // Dashboard pages a logged-in merchant is returned to after a browser refresh.
 const RESTORABLE_TABS: Tab[] = ['onboarding', 'inbox', 'catalog', 'persona', 'orders', 'notifications', 'analytics', 'integrations', 'settings', 'support'];
 
@@ -99,9 +102,9 @@ export default function App() {
         : tab;
     setActiveTab(effectiveTab);
     if (replace) {
-      window.history.replaceState({ tab: effectiveTab }, '', `#${effectiveTab}`);
+      window.history.replaceState({ tab: effectiveTab }, '', tabUrl(effectiveTab));
     } else {
-      window.history.pushState({ tab: effectiveTab }, '', `#${effectiveTab}`);
+      window.history.pushState({ tab: effectiveTab }, '', tabUrl(effectiveTab));
     }
   };
 
@@ -111,7 +114,7 @@ export default function App() {
     const incomingHash = window.location.hash;
     const hasGoogleParams = incomingHash.includes('googleCode') || incomingHash.includes('googleError');
     if (!hasGoogleParams) {
-      window.history.replaceState({ tab: activeTab }, '', `#${activeTab}`);
+      window.history.replaceState({ tab: activeTab }, '', tabUrl(activeTab));
     }
     const handlePopState = (e: PopStateEvent) => {
       const requested = (e.state?.tab as Tab) || 'landing';
