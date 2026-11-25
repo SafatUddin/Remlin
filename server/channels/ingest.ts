@@ -33,16 +33,29 @@ export async function ingestInboundDm(dm: InboundDm): Promise<void> {
   const isNewConversation = !conversation;
   if (!conversation) {
     conversation = await prisma.conversation.create({
-      data: { storeId, channelType, externalUserId, customerName: dm.customerName || undefined, avatarUrl: dm.avatarUrl || undefined, lastMessageAt: new Date() },
-    });
-  } else if ((dm.customerName && conversation.customerName !== dm.customerName) || (dm.avatarUrl && !conversation.avatarUrl)) {
-    conversation = await prisma.conversation.update({
-      where: { id: conversation.id },
       data: {
-        ...(dm.customerName ? { customerName: dm.customerName } : {}),
-        ...(dm.avatarUrl && !conversation.avatarUrl ? { avatarUrl: dm.avatarUrl, avatarFetchedAt: new Date() } : {}),
+        storeId,
+        channelType,
+        externalUserId,
+        customerName: dm.customerName || undefined,
+        avatarUrl: dm.avatarUrl || undefined,
+        avatarFetchedAt: dm.avatarUrl ? new Date() : undefined,
+        lastMessageAt: new Date(),
       },
     });
+  } else {
+    const avatarStale = !conversation.avatarFetchedAt || Date.now() - conversation.avatarFetchedAt.getTime() > 12 * 60 * 60 * 1000;
+    const shouldUpdateAvatar = Boolean(dm.avatarUrl) && (!conversation.avatarUrl || avatarStale);
+    const shouldUpdateName = Boolean(dm.customerName) && conversation.customerName !== dm.customerName;
+    if (shouldUpdateName || shouldUpdateAvatar) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          ...(shouldUpdateName ? { customerName: dm.customerName! } : {}),
+          ...(shouldUpdateAvatar ? { avatarUrl: dm.avatarUrl!, avatarFetchedAt: new Date() } : {}),
+        },
+      });
+    }
   }
 
   const savedImageUrl = dm.image ? await saveChatImage(storeId, dm.image).catch(() => null) : null;

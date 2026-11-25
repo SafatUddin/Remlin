@@ -20,6 +20,8 @@ import {
   sendWhatsAppImage,
   sendInstagramMessage,
   sendInstagramImage,
+  fetchMessengerProfile,
+  fetchInstagramProfile,
 } from '../meta';
 import { generateAgentReply } from '../agent';
 import { getProductCurrency } from '../../shared/currency';
@@ -33,9 +35,16 @@ import {
   generateAndStoreAgentReply,
 } from '../conversationEngine';
 import { deliverChannelMessage } from '../channels/outbound';
+import { fetchWhatsAppProfilePic, getWhatsAppState } from '../channels/whatsapp';
 import { withBusinessProfile, businessContact } from '../businessProfile';
 
 const isProduction = process.env.NODE_ENV === 'production';
+
+// Cooldown per conversation so 5s inbox polling does not repeatedly hit Meta's Graph API
+// when a profile lookup fails or returns empty.
+const PROFILE_BACKFILL_COOLDOWN_MS = 60 * 1000;
+const AVATAR_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const lastProfileBackfillAttempt = new Map<string, number>();
 
 const inboxMessageSelect = {
   id: true,
@@ -187,6 +196,74 @@ export function createConversationsRouter(): express.Router {
           orderBy: { createdAt: 'desc' },
         }),
       ]);
+
+      // Backfill missing Facebook/Instagram/WhatsApp customer names & avatars so existing
+      // threads resolve automatically when the Inbox loads/polls.
+      const now = Date.now();
+      const waConnected = getWhatsAppState(storeId).status === 'connected';
+      const needsBackfill = conversations.filter((c) => {
+        if (!c.externalUserId) return false;
+        if (c.channelType !== 'FACEBOOK' && c.channelType !== 'INSTAGRAM' && c.channelType !== 'WHATSAPP') return false;
+        if (c.channelType === 'WHATSAPP' && !waConnected) return false;
+        const missingName = c.channelType !== 'WHATSAPP' && (!c.customerName || c.customerName === 'New Customer');
+        const avatarStale = !c.avatarFetchedAt || now - c.avatarFetchedAt.getTime() > AVATAR_REFRESH_INTERVAL_MS;
+        if (!missingName && !avatarStale) return false;
+        const lastAttempt = lastProfileBackfillAttempt.get(c.id) ?? 0;
+        return now - lastAttempt > PROFILE_BACKFILL_COOLDOWN_MS;
+      }).slice(0, 6);
+
+      if (needsBackfill.length > 0) {
+        for (const c of needsBackfill) lastProfileBackfillAttempt.set(c.id, now);
+        const needsFb = needsBackfill.some((c) => c.channelType === 'FACEBOOK');
+        const needsIg = needsBackfill.some((c) => c.channelType === 'INSTAGRAM');
+        const [fbToken, igCreds] = await Promise.all([
+          needsFb ? getPageAccessTokenForStore(storeId) : Promise.resolve(null),
+          needsIg ? getInstagramCredentialsForStore(storeId) : Promise.resolve(null),
+        ]);
+
+        await Promise.all(
+          needsBackfill.map(async (c) => {
+            try {
+              if (c.channelType === 'WHATSAPP') {
+                const picUrl = await fetchWhatsAppProfilePic(storeId, c.externalUserId!);
+                const updateData: { avatarUrl?: string; avatarFetchedAt: Date } = {
+                  avatarFetchedAt: new Date(),
+                };
+                if (picUrl) {
+                  updateData.avatarUrl = picUrl;
+                  c.avatarUrl = picUrl;
+                }
+                c.avatarFetchedAt = updateData.avatarFetchedAt;
+                await prisma.conversation.update({ where: { id: c.id }, data: updateData });
+                return;
+              }
+
+              const profile =
+                c.channelType === 'FACEBOOK' && fbToken
+                  ? await fetchMessengerProfile(fbToken, c.externalUserId!)
+                  : c.channelType === 'INSTAGRAM' && igCreds
+                    ? await fetchInstagramProfile(igCreds.accessToken, c.externalUserId!)
+                    : null;
+              if (!profile) return;
+              const updateData: { customerName?: string; avatarUrl?: string; avatarFetchedAt: Date } = {
+                avatarFetchedAt: new Date(),
+              };
+              if (profile.name && (!c.customerName || c.customerName === 'New Customer')) {
+                updateData.customerName = profile.name;
+                c.customerName = profile.name;
+              }
+              if (profile.profilePicUrl) {
+                updateData.avatarUrl = profile.profilePicUrl;
+                c.avatarUrl = profile.profilePicUrl;
+              }
+              c.avatarFetchedAt = updateData.avatarFetchedAt;
+              await prisma.conversation.update({ where: { id: c.id }, data: updateData });
+            } catch (err) {
+              console.error('Inbox profile backfill failed:', err);
+            }
+          })
+        );
+      }
 
       // Merge orders into conversations by conversationId
       const ordersByConversation = new Map<string, any[]>();

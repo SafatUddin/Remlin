@@ -325,7 +325,7 @@ export async function generateAgentReply({
     orderStateDescription.push(`You showed an order summary. Waiting for customer to confirm or cancel.`);
   }
 
-  const systemInstruction = `You are ShopMate AI, an elite autonomous sales agent for ${storeName}.
+  const systemInstruction = `You are Remlin, an elite autonomous sales agent for ${storeName}.
 
 Your goal: Answer customer questions naturally, understand their intent (in English, Bangla, or Banglish), and use the available tools to execute actions.
 

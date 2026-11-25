@@ -96,18 +96,57 @@ export interface MetaProfile {
 }
 
 export async function fetchMessengerProfile(pageAccessToken: string, psid: string): Promise<MetaProfile> {
+  let name: string | null = null;
+  let profilePicUrl: string | null = null;
+
+  // 1) Direct Messenger User Profile API (valid fields for a PSID: first_name, last_name, profile_pic).
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${psid}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`
+      `https://graph.facebook.com/v21.0/${encodeURIComponent(psid)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`
     );
-    if (!res.ok) return { name: null, profilePicUrl: null };
-    const data = await res.json();
-    const name = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
-    return { name: name || null, profilePicUrl: data.profile_pic || null };
+    if (res.ok) {
+      const data = await res.json();
+      name = [data.first_name, data.last_name].filter(Boolean).join(' ').trim() || null;
+      profilePicUrl = data.profile_pic || null;
+    }
   } catch (err) {
     console.error('Failed to fetch Messenger profile:', err);
-    return { name: null, profilePicUrl: null };
   }
+
+  // 2) Fallback: read the sender's name from the Page's conversation participants.
+  if (!name) {
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v21.0/me/conversations?user_id=${encodeURIComponent(psid)}&fields=participants&access_token=${encodeURIComponent(pageAccessToken)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const participants: Array<{ id?: string; name?: string }> = data?.data?.[0]?.participants?.data || [];
+        name = participants.find((p) => p.id === psid)?.name || null;
+      }
+    } catch (err) {
+      console.error('Failed to fetch Messenger participant name:', err);
+    }
+  }
+
+  // 3) Fallback: fetch profile picture URL from the /{psid}/picture edge if missing.
+  if (!profilePicUrl) {
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v21.0/${encodeURIComponent(psid)}/picture?type=large&redirect=false&access_token=${encodeURIComponent(pageAccessToken)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.data?.url && !data?.data?.is_silhouette) {
+          profilePicUrl = data.data.url;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch Messenger profile picture:', err);
+    }
+  }
+
+  return { name, profilePicUrl };
 }
 
 export async function sendInstagramMessage(igAccountId: string, accessToken: string, recipientIgUserId: string, text: string): Promise<void> {

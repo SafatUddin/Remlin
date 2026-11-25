@@ -48,6 +48,26 @@ export function getWhatsAppState(storeId: string) {
   return { status: (s?.status ?? 'idle') as WhatsAppStatus, qr: s?.qr ?? null, phone: s?.phone ?? null, error: s?.error ?? null };
 }
 
+/** Fetches a WhatsApp contact's profile picture URL via the active Baileys socket, if connected. */
+export async function fetchWhatsAppProfilePic(storeId: string, externalUserId: string): Promise<string | null> {
+  const s = sessions.get(storeId);
+  if (!s || s.stopped || s.status !== 'connected' || !s.sock?.profilePictureUrl) return null;
+  const jid = toJid(externalUserId);
+  try {
+    const url = await s.sock.profilePictureUrl(jid, 'image');
+    if (typeof url === 'string' && url) return url;
+  } catch {
+    // Contact may have privacy settings hiding their profile picture, or 'image' may need 'preview' fallback
+  }
+  try {
+    const url = await s.sock.profilePictureUrl(jid, 'preview');
+    if (typeof url === 'string' && url) return url;
+  } catch {
+    // No profile picture available for this contact
+  }
+  return null;
+}
+
 export async function startWhatsApp(storeId: string) {
   const existing = sessions.get(storeId);
   if (existing && !existing.stopped && existing.status !== 'error') return;
@@ -188,6 +208,11 @@ async function handleMessage(session: WaSession, sock: any, msg: any, downloadMe
   const download = async (): Promise<Buffer | undefined> =>
     downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }).catch(() => undefined);
 
+  const avatarUrl =
+    (await sock.profilePictureUrl?.(phoneJid || jid, 'image').catch(() => null)) ||
+    (await sock.profilePictureUrl?.(jid, 'preview').catch(() => null)) ||
+    null;
+
   await ingestInboundDm({
     storeId: session.storeId,
     channelType: 'WHATSAPP',
@@ -195,6 +220,7 @@ async function handleMessage(session: WaSession, sock: any, msg: any, downloadMe
     externalMessageId: msg.key.id,
     text,
     customerName,
+    avatarUrl,
     image: hasImage ? await download() : undefined,
     audio: hasAudio ? await download() : undefined,
   });

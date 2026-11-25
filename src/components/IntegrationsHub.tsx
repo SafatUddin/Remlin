@@ -1265,7 +1265,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                       Setup {integrations.find(i => i.id === activeWizardId)?.name}
                     </h4>
                     <p className="text-xs text-white/50 mt-0.5">
-                      ShopMate channel adapter v1.1
+                      Remlin channel adapter v1.1
                     </p>
                   </div>
                 </div>
@@ -1513,7 +1513,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                                 {shopifyStoreName ? `Connected: ${shopifyStoreName}` : 'Shopify connected'}
                               </h5>
                               <p className="text-xs text-white/60 max-w-sm mx-auto leading-relaxed font-sans">
-                                Pull the latest products, prices, and stock levels from this store into your ShopMate catalog.
+                                Pull the latest products, prices, and stock levels from this store into your Remlin catalog.
                               </p>
                             </div>
 
@@ -1625,7 +1625,7 @@ export default function IntegrationsHub({ integrations, onToggleConnection, onRe
                                 {wooStoreName ? `Connected: ${wooStoreName}` : 'WooCommerce connected'}
                               </h5>
                               <p className="text-xs text-white/60 max-w-sm mx-auto leading-relaxed font-sans">
-                                Sync products, categories, SKUs, and stock levels from your WooCommerce store into ShopMate AI.
+                                Sync products, categories, SKUs, and stock levels from your WooCommerce store into Remlin.
                               </p>
                             </div>
 

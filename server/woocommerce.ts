@@ -31,7 +31,7 @@ export async function verifyWooCommerceStore(url: string, consumerKey: string, c
   const res = await fetch(`${baseUrl}/wp-json/wc/v3/products?per_page=1`, {
     headers: {
       'Authorization': authHeader,
-      'User-Agent': 'ShopMateAI-WooCommerce-Adapter/1.0',
+      'User-Agent': 'Remlin-WooCommerce-Adapter/1.0',
     },
   });
 
@@ -59,7 +59,7 @@ async function fetchWooCurrency(baseUrl: string, authHeader: string): Promise<st
     const res = await fetch(`${baseUrl}/wp-json/wc/v3/data/currencies/current`, {
       headers: {
         'Authorization': authHeader,
-        'User-Agent': 'ShopMateAI-WooCommerce-Adapter/1.0',
+        'User-Agent': 'Remlin-WooCommerce-Adapter/1.0',
       },
     });
     if (!res.ok) return undefined;
@@ -85,7 +85,7 @@ export async function fetchWooCommerceProducts(url: string, consumerKey: string,
     const res = await fetch(apiUrl, {
       headers: {
         'Authorization': authHeader,
-        'User-Agent': 'ShopMateAI-WooCommerce-Adapter/1.0',
+        'User-Agent': 'Remlin-WooCommerce-Adapter/1.0',
       },
     });
 

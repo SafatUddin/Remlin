@@ -111,6 +111,7 @@ function ChatAvatar({ name, avatarUrl, sizeClass }: { name: string; avatarUrl?: 
         <img
           src={avatarUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="w-full h-full object-cover"
           onError={() => setImageFailed(true)}
         />

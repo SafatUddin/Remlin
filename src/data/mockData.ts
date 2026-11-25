@@ -428,7 +428,7 @@ export const INITIAL_INTEGRATIONS: Integration[] = [
   {
     id: 'int-woo',
     name: 'WooCommerce',
-    description: 'Integrate your WordPress store to enable ShopMate\'s custom AI checkout optimizations.',
+    description: 'Integrate your WordPress store to enable Remlin\'s custom AI checkout optimizations.',
     connected: false,
     statusText: 'Setup in 2 mins',
     hasAction: true,
@@ -567,7 +567,7 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
     unread: true,
     status: 'AI Managed',
     messages: [
-      { id: 'm1', sender: 'customer', text: "Hello! I'm interested in the ShopMate Professional Series. Is the SM-99 SKU available in large?", time: '10:42 AM' },
+      { id: 'm1', sender: 'customer', text: "Hello! I'm interested in the Remlin Professional Series. Is the SM-99 SKU available in large?", time: '10:42 AM' },
       { id: 'm2', sender: 'ai', text: "Yes, Junaid! We have the SM-99 Professional Series in stock for the Large size in Carbon Black. Would you like me to draft an order for you to review?", time: '10:43 AM' },
       { id: 'm3', sender: 'customer', text: "That sounds great. What's the current pricing for a bulk order of 5 units?", time: '10:45 AM' },
       { id: 'm3_1', sender: 'ai', text: "We have a special 5-pack pricing where the bulk discount applies automatically, lowering it to $249 per unit. I can set it up in your cart right now.", time: '10:46 AM' },
@@ -631,7 +631,7 @@ export const INITIAL_CONVERSATIONS: Conversation[] = [
     unread: false,
     status: 'Active',
     messages: [
-      { id: 'm11', sender: 'customer', text: 'Hey Shopmate, I just placed an order. Can you change my shipping address to Road 12, Banani?', time: '4h ago' }
+      { id: 'm11', sender: 'customer', text: 'Hey Remlin, I just placed an order. Can you change my shipping address to Road 12, Banani?', time: '4h ago' }
     ],
     lastProductViewed: 'Void Audio One',
     isComplaint: true,

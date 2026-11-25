@@ -16,14 +16,14 @@ export default function LoginPage({ onNavigate, onLoginSuccess, initialError }: 
   const [mode, setMode] = useState<'login' | 'reset_password'>('login');
 
   // Login states
-  const [email, setEmail] = useState('merchant@shopmate.ai');
+  const [email, setEmail] = useState('merchant@remlin.ai');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState(initialError || '');
 
   // Reset password states
-  const [resetEmail, setResetEmail] = useState('merchant@shopmate.ai');
+  const [resetEmail, setResetEmail] = useState('merchant@remlin.ai');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetError, setResetError] = useState('');
@@ -116,7 +116,7 @@ export default function LoginPage({ onNavigate, onLoginSuccess, initialError }: 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-[#161618] border border-white/[0.06] px-3.5 py-2.5 font-sans text-xs text-white placeholder-white/20 focus:border-white/20 transition-all outline-none rounded"
-                  placeholder="merchant@shopmate.ai"
+                  placeholder="merchant@remlin.ai"
                 />
               </div>
 
@@ -192,7 +192,7 @@ export default function LoginPage({ onNavigate, onLoginSuccess, initialError }: 
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   className="w-full bg-[#161618] border border-white/[0.06] px-3.5 py-2.5 font-sans text-xs text-white placeholder-white/20 focus:border-white/20 transition-all outline-none rounded"
-                  placeholder="merchant@shopmate.ai"
+                  placeholder="merchant@remlin.ai"
                 />
               </div>
 
